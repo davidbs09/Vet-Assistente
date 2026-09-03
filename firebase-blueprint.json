@@ -59,6 +59,20 @@
         "createdBy": { "type": "string" }
       },
       "required": ["patientId", "date", "createdBy"]
+    },
+    "UserSession": {
+      "title": "UserSession",
+      "description": "Single active session record for concurrent login prevention.",
+      "type": "object",
+      "properties": {
+        "sessionId": { "type": "string" },
+        "email": { "type": "string" },
+        "userId": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "lastActive": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["sessionId", "email", "userId", "isActive"]
     }
   },
   "firestore": {
@@ -73,6 +87,10 @@
     "/prescriptions/{prescriptionId}": {
       "schema": "Prescription",
       "description": "Collection of prescriptions."
+    },
+    "/userSessions/{userId}": {
+      "schema": "UserSession",
+      "description": "Single active session per user to enforce one login at a time."
     }
   }
 }

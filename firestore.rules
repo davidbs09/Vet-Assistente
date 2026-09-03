@@ -25,6 +25,10 @@ service cloud.firestore {
       allow delete: if isAuthenticated() && isOwner(resource.data);
     }
 
+    match /userSessions/{userId} {
+      allow read, write: if isAuthenticated() && request.auth.uid == userId;
+    }
+
     match /test/connection {
       allow read: if true;
     }
