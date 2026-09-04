@@ -1,6 +1,14 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+function getApiKey(): string {
+  if (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) {
+    return process.env.GEMINI_API_KEY;
+  }
+  const env = (import.meta as any).env || {};
+  return env.VITE_GEMINI_API_KEY || "";
+}
+
+const ai = new GoogleGenAI({ apiKey: getApiKey() });
 
 export interface DiagnosisResult {
   diagnosis: string;
