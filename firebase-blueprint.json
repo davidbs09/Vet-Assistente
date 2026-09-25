@@ -60,6 +60,22 @@
       },
       "required": ["patientId", "date", "createdBy"]
     },
+    "AppUser": {
+      "title": "AppUser",
+      "description": "Veterinary user profile stored in Firestore. Password lives in Firebase Auth; access is gated by status.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "crmv": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "user"] },
+        "status": { "type": "string", "enum": ["pending", "active"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "activatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "displayName", "role", "status"]
+    },
     "UserSession": {
       "title": "UserSession",
       "description": "Single active session record for concurrent login prevention.",
@@ -87,6 +103,10 @@
     "/prescriptions/{prescriptionId}": {
       "schema": "Prescription",
       "description": "Collection of prescriptions."
+    },
+    "/users/{userId}": {
+      "schema": "AppUser",
+      "description": "User profiles created on register. Pending until an admin activates the account."
     },
     "/userSessions/{userId}": {
       "schema": "UserSession",

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  auth, db, googleProvider, signInWithPopup, signOut, onAuthStateChanged, 
+  auth, db, signOut, onAuthStateChanged, 
   collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, 
   query, where, orderBy, onSnapshot, Timestamp, serverTimestamp, User 
 } from './firebase';
@@ -15,6 +15,19 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
+import LoginPage, { RegisterFormValues } from './components/LoginPage';
+import AdminUsersPage from './components/AdminUsersPage';
+import {
+  clearAuthToken,
+  ensureUserProfile,
+  isAdminProfile,
+  loginWithEmail,
+  logoutFromAuth,
+  mapAuthError,
+  persistAuthToken,
+  registerWithEmail,
+  UserProfile,
+} from './services/authService';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -199,12 +212,15 @@ export default function App() {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [consultations, setConsultations] = useState<Consultation[]>([]);
-  const [view, setView] = useState<'dashboard' | 'patient' | 'new-consultation' | 'prescription' | 'prontuario'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'patient' | 'new-consultation' | 'prescription' | 'prontuario' | 'admin'>('dashboard');
   const [currentConsultation, setCurrentConsultation] = useState<Consultation | null>(null);
   const [isAddingPatient, setIsAddingPatient] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [patientToDelete, setPatientToDelete] = useState<Patient | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [loginSuccess, setLoginSuccess] = useState<string | null>(null);
+  const [authSubmitting, setAuthSubmitting] = useState(false);
   const [showDeployGuide, setShowDeployGuide] = useState(false);
   const [copiedSnippet, setCopiedSnippet] = useState<string | null>(null);
 
@@ -302,14 +318,41 @@ export default function App() {
   useEffect(() => {
     testConnection();
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
-      setUser(u);
-      setLoading(false);
-      if (u) {
-        setSessionStatus('checking');
-        await checkSession(u);
-      } else {
+      if (!u) {
+        clearAuthToken();
+        setUser(null);
+        setUserProfile(null);
         setSessionStatus('checking');
         setConflictDetails(null);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const profile = await ensureUserProfile(u);
+        if (profile.status !== 'active' && !isAdminProfile(profile, u.email)) {
+          clearAuthToken();
+          await signOut(auth);
+          setUser(null);
+          setUserProfile(null);
+          setLoginError('Sua conta ainda está pendente de ativação pelo administrador.');
+          setSessionStatus('checking');
+          setLoading(false);
+          return;
+        }
+
+        await persistAuthToken(u);
+        setUser(u);
+        setUserProfile(profile);
+        setSessionStatus('checking');
+        await checkSession(u);
+      } catch (err) {
+        console.error('Error restoring authenticated session:', err);
+        setLoginError(mapAuthError(err));
+        setUser(null);
+        setUserProfile(null);
+      } finally {
+        setLoading(false);
       }
     });
     return () => unsubscribe();
@@ -401,27 +444,38 @@ export default function App() {
     return () => unsubscribe();
   }, [selectedPatient, user, sessionStatus]);
 
-  const handleLogin = async () => {
+  const handleLogin = async (email: string, password: string) => {
     try {
+      setAuthSubmitting(true);
       setLoginError(null);
+      setLoginSuccess(null);
       setSessionStatus('checking');
-      await signInWithPopup(auth, googleProvider);
-    } catch (error: any) {
+      const result = await loginWithEmail(email, password);
+      setUser(result.user);
+      setUserProfile(result.profile);
+    } catch (error: unknown) {
       console.error('Login error:', error);
       setSessionStatus('checking');
-      if (error?.code === 'auth/unauthorized-domain') {
-        const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'ajudavoce.com.br';
-        setLoginError(
-          `O domínio atual (${currentHost}) não está autorizado no Firebase Authentication. ` +
-          `Para ativar o login com Google em sua página, adicione "ajudavoce.com.br" e "www.ajudavoce.com.br" no Firebase Console > Authentication > Configurações > Domínios Autorizados.`
-        );
-      } else if (error?.code === 'auth/popup-blocked') {
-        setLoginError('O pop-up de login foi bloqueado pelo seu navegador. Por favor, permita pop-ups para este site e tente novamente.');
-      } else if (error?.code === 'auth/popup-closed-by-user') {
-        setLoginError(null);
-      } else {
-        setLoginError(error?.message || 'Não foi possível completar o login. Tente novamente.');
-      }
+      setLoginError(mapAuthError(error));
+    } finally {
+      setAuthSubmitting(false);
+    }
+  };
+
+  const handleRegister = async (values: RegisterFormValues) => {
+    try {
+      setAuthSubmitting(true);
+      setLoginError(null);
+      setLoginSuccess(null);
+      await registerWithEmail(values);
+      setLoginSuccess(
+        'Cadastro enviado. Sua conta ficará pendente até o administrador autorizar o acesso.'
+      );
+    } catch (error: unknown) {
+      console.error('Register error:', error);
+      setLoginError(mapAuthError(error));
+    } finally {
+      setAuthSubmitting(false);
     }
   };
 
@@ -439,11 +493,13 @@ export default function App() {
       }
     }
     sessionStorage.removeItem('vetai_session_id');
-    await signOut(auth);
+    await logoutFromAuth();
     setUser(null);
+    setUserProfile(null);
     setSessionStatus('checking');
     setConflictDetails(null);
     setLoginError(null);
+    setLoginSuccess(null);
     setView('dashboard');
     setSelectedPatient(null);
   };
@@ -534,59 +590,14 @@ export default function App() {
 
   if (!user) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50 p-4">
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="w-full max-w-md space-y-6 rounded-2xl bg-white p-8 shadow-xl"
-        >
-          <div className="text-center">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
-              <Dog className="h-8 w-8 text-emerald-600" />
-            </div>
-            <h1 className="mt-6 text-3xl font-bold tracking-tight text-slate-900">VetAI Assistant</h1>
-            <p className="mt-2 text-slate-600">Sua inteligência artificial para consultas veterinárias.</p>
-          </div>
-
-          {loginError && (
-            <div className="rounded-xl bg-rose-50 p-4 text-xs text-rose-800 border border-rose-200 space-y-2 text-left">
-              <div className="font-semibold flex items-center gap-1.5 text-rose-900">
-                <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
-                Erro ao Autenticar no Domínio
-              </div>
-              <p className="leading-relaxed">{loginError}</p>
-              <button
-                type="button"
-                onClick={() => setShowDeployGuide(true)}
-                className="inline-flex items-center gap-1 font-semibold text-rose-900 underline hover:text-rose-950 cursor-pointer"
-              >
-                <Globe className="h-3.5 w-3.5" /> Ver passo a passo de autorização do domínio
-              </button>
-            </div>
-          )}
-
-          <Button onClick={handleLogin} className="w-full" size="lg">
-            Entrar com Google
-          </Button>
-
-          <div className="space-y-2 text-center text-xs text-slate-400">
-            <div>Acesso restrito a médicos veterinários autorizados.</div>
-            <div className="flex items-center justify-center gap-1 text-slate-500 font-medium">
-              <Lock className="h-3.5 w-3.5 text-slate-400" />
-              <span>Acesso exclusivo: aceita somente 1 login por e-mail por vez</span>
-            </div>
-            <div className="pt-2 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => setShowDeployGuide(true)}
-                className="inline-flex items-center gap-1.5 text-xs text-emerald-700 hover:text-emerald-800 font-medium transition-colors cursor-pointer"
-              >
-                <Globe className="h-3.5 w-3.5 text-emerald-600" />
-                <span>Instruções para implantar em www.ajudavoce.com.br</span>
-              </button>
-            </div>
-          </div>
-        </motion.div>
+      <>
+        <LoginPage
+          onLogin={handleLogin}
+          onRegister={handleRegister}
+          error={loginError}
+          success={loginSuccess}
+          submitting={authSubmitting}
+        />
 
         {/* Deploy Guide Modal when logged out */}
         <AnimatePresence>
@@ -598,7 +609,7 @@ export default function App() {
             />
           )}
         </AnimatePresence>
-      </div>
+      </>
     );
   }
 
@@ -724,9 +735,23 @@ export default function App() {
               <span>Login Único Ativo</span>
             </div>
 
+            {isAdminProfile(userProfile, user.email) && (
+              <button
+                type="button"
+                onClick={() => setView('admin')}
+                className="hidden sm:flex items-center gap-1.5 rounded-full bg-slate-900 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-slate-800 cursor-pointer"
+              >
+                Acessos
+              </button>
+            )}
+
             <div className="flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5">
-              <img src={user.photoURL || ''} alt="" className="h-6 w-6 rounded-full" />
-              <span className="text-sm font-medium text-slate-700 hidden sm:block">{user.displayName}</span>
+              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-[10px] font-bold text-white">
+                {(userProfile?.displayName || user.email || 'U').slice(0, 1).toUpperCase()}
+              </div>
+              <span className="text-sm font-medium text-slate-700 hidden sm:block">
+                {userProfile?.displayName || user.email}
+              </span>
             </div>
             <Button variant="ghost" size="sm" onClick={handleLogout}>
               <LogOut className="h-4 w-4" />
@@ -737,6 +762,17 @@ export default function App() {
 
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <AnimatePresence mode="wait">
+          {view === 'admin' && isAdminProfile(userProfile, user.email) && (
+            <motion.div
+              key="admin"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+            >
+              <AdminUsersPage />
+            </motion.div>
+          )}
+
           {view === 'dashboard' && (
             <motion.div
               key="dashboard"
