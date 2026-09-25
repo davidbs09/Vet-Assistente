@@ -38,12 +38,22 @@ export interface RegisterPayload {
   crmv?: string;
 }
 
-const adminEmail = String((import.meta as any).env?.VITE_ADMIN_EMAIL || '')
+const env = (import.meta as any).env || {};
+const adminEmail = String(env.VITE_ADMIN_EMAIL || 'admin@vetassistente.local')
   .trim()
   .toLowerCase();
+const adminUsername = String(env.VITE_ADMIN_USERNAME || 'admin').trim().toLowerCase();
+const adminBootstrapPassword = String(env.VITE_ADMIN_BOOTSTRAP_PASSWORD || 'adm123');
 
 export function isAdminEmail(email?: string | null): boolean {
   return Boolean(adminEmail && email && email.trim().toLowerCase() === adminEmail);
+}
+
+export function resolveLoginEmail(identifier: string): string {
+  const value = identifier.trim().toLowerCase();
+  if (!value) return value;
+  if (value === adminUsername || value === 'admin') return adminEmail;
+  return identifier.trim();
 }
 
 export function isAdminProfile(profile?: UserProfile | null, email?: string | null): boolean {
@@ -121,15 +131,51 @@ export async function ensureUserProfile(
   return { id: user.uid, ...profile, email: user.email || profile.email };
 }
 
+async function ensureBootstrapAdmin(email: string, password: string): Promise<void> {
+  const isBootstrapAdmin =
+    email.trim().toLowerCase() === adminEmail && password === adminBootstrapPassword;
+  if (!isBootstrapAdmin) return;
+
+  try {
+    const credential = await createUserWithEmailAndPassword(auth, email, password);
+    await updateProfile(credential.user, { displayName: 'Administrador' });
+    await ensureUserProfile(credential.user, { displayName: 'Administrador' });
+  } catch (error: unknown) {
+    const code = typeof error === 'object' && error && 'code' in error
+      ? String((error as { code?: string }).code)
+      : '';
+    if (code !== 'auth/email-already-in-use') throw error;
+  }
+}
+
 export async function loginWithEmail(email: string, password: string): Promise<{
   user: User;
   profile: UserProfile;
   token: string;
 }> {
-  const credential = await signInWithEmailAndPassword(auth, email.trim(), password);
-  const profile = await ensureUserProfile(credential.user);
+  const resolvedEmail = resolveLoginEmail(email);
+  try {
+    await signInWithEmailAndPassword(auth, resolvedEmail, password);
+  } catch (error: unknown) {
+    const code = typeof error === 'object' && error && 'code' in error
+      ? String((error as { code?: string }).code)
+      : '';
+    if (code === 'auth/user-not-found' || code === 'auth/invalid-credential') {
+      await ensureBootstrapAdmin(resolvedEmail, password);
+      await signInWithEmailAndPassword(auth, resolvedEmail, password);
+    } else {
+      throw error;
+    }
+  }
 
-  if (profile.status !== 'active' && !isAdminProfile(profile, credential.user.email)) {
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    throw new Error('Não foi possível autenticar o administrador.');
+  }
+
+  const profile = await ensureUserProfile(currentUser);
+
+  if (profile.status !== 'active' && !isAdminProfile(profile, currentUser.email)) {
     clearAuthToken();
     await signOut(auth);
     const error = new Error(
@@ -139,8 +185,8 @@ export async function loginWithEmail(email: string, password: string): Promise<{
     throw error;
   }
 
-  const token = await persistAuthToken(credential.user);
-  return { user: credential.user, profile, token };
+  const token = await persistAuthToken(currentUser);
+  return { user: currentUser, profile, token };
 }
 
 export async function registerWithEmail(payload: RegisterPayload): Promise<void> {
@@ -188,6 +234,10 @@ export function mapAuthError(error: unknown): string {
     : '';
   const message = error instanceof Error ? error.message : 'Não foi possível completar a operação.';
 
+  if (code === 'permission-denied' || message.toLowerCase().includes('insufficient permissions')) {
+    return 'O login autenticou, mas o Firestore bloqueou a gravação do perfil. Publique as regras de security do arquivo firestore.rules no Console (Firestore > Regras).';
+  }
+
   switch (code) {
     case 'auth/account-pending':
       return message;
@@ -206,6 +256,8 @@ export function mapAuthError(error: unknown): string {
       return 'Falha de rede ao autenticar. Verifique sua conexão.';
     case 'auth/operation-not-allowed':
       return 'O login por e-mail e senha ainda não está habilitado neste projeto Firebase.';
+    case 'auth/configuration-not-found':
+      return 'O Authentication ainda não foi iniciado neste projeto Firebase. No Console, abra Authentication, clique em Começar e habilite o provedor E-mail/senha.';
     default:
       return message;
   }

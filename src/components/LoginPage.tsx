@@ -240,19 +240,20 @@ export default function LoginPage({
                 <div>
                   <h2 className="text-lg font-semibold text-slate-900">Entrar</h2>
                   <p className="mt-1 text-xs text-slate-500">
-                    Use o e-mail e a senha da conta já ativada pelo administrador.
+                    Use o usuário ou e-mail e a senha da conta já ativada pelo administrador.
                   </p>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-slate-600" htmlFor="login-email">E-mail</label>
+                  <label className="text-xs font-medium text-slate-600" htmlFor="login-email">Usuário ou e-mail</label>
                   <input
                     id="login-email"
-                    type="email"
-                    autoComplete="email"
+                    type="text"
+                    autoComplete="username"
                     className={inputClass}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     disabled={submitting}
+                    placeholder="admin"
                     required
                   />
                 </div>
@@ -274,7 +275,7 @@ export default function LoginPage({
                   disabled={submitting}
                   className="inline-flex w-full items-center justify-center rounded-lg bg-slate-900 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-slate-800 disabled:opacity-60 cursor-pointer"
                 >
-                  {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Entrar com e-mail e senha'}
+                  {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Entrar'}
                 </button>
                 <button
                   type="button"
