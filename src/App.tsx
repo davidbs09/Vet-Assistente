@@ -741,13 +741,14 @@ export default function App() {
   const addPatient = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!user) return;
+    const form = e.currentTarget;
     try {
       await enforceAccessOnRequest();
     } catch (err) {
       await dropBlockedAccess(mapAuthError(err));
       return;
     }
-    const formData = new FormData(e.currentTarget);
+    const formData = new FormData(form);
     const newPatient = {
       name: formData.get('name') as string,
       species: formData.get('species') as 'dog' | 'cat',
@@ -758,8 +759,17 @@ export default function App() {
       createdAt: Timestamp.now(),
       createdBy: user.uid,
     };
-    await addDoc(collection(db, 'patients'), newPatient);
-    setIsAddingPatient(false);
+    try {
+      await addDoc(collection(db, 'patients'), newPatient);
+      setIsAddingPatient(false);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.CREATE, 'patients');
+      if (isPermissionDenied(err)) {
+        alert('O Firestore bloqueou a criação do paciente. Publique o arquivo firestore.rules completo no Console (Firestore > Regras).');
+        return;
+      }
+      alert(err instanceof Error ? err.message : 'Não foi possível criar o paciente.');
+    }
   };
 
   const deletePatient = async (id: string) => {
@@ -1650,7 +1660,7 @@ function NewConsultationView({ patient, onBack, onComplete }: { patient: Patient
       setResult(advice);
     } catch (error) {
       console.error('AI error:', error);
-      alert('Erro ao processar diagnóstico. Tente novamente.');
+      alert(error instanceof Error ? error.message : 'Erro ao processar diagnóstico. Tente novamente.');
     } finally {
       setLoading(false);
     }

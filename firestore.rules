@@ -1,12 +1,11 @@
 rules_version = '2';
-// Version: 1.4 - Password reset request flag visible to admin
+// Version: 1.6 - Original clinical rules plus login/admin collections
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helper Functions
     function isAuthenticated() {
       return request.auth != null;
     }
-    
+
     function isOwner(data) {
       return isAuthenticated() && data.createdBy == request.auth.uid;
     }
@@ -19,13 +18,6 @@ service cloud.firestore {
       return isAuthenticated()
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
         && userDoc().role == 'admin';
-    }
-
-    function isActiveUser() {
-      return isAuthenticated()
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && userDoc().status == 'active'
-        && userDoc().get('mustResetPassword', false) != true;
     }
 
     function passwordResetUnchanged() {
@@ -55,21 +47,28 @@ service cloud.firestore {
     }
 
     match /patients/{patientId} {
-      allow read: if isActiveUser() && (resource == null || isOwner(resource.data));
-      allow create: if isActiveUser() && request.resource.data.createdBy == request.auth.uid;
-      allow update: if isActiveUser() && isOwner(resource.data) && request.resource.data.createdBy == request.auth.uid;
-      allow delete: if isActiveUser() && isOwner(resource.data);
+      allow read: if isAuthenticated() && (resource == null || isOwner(resource.data));
+      allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isAuthenticated() && isOwner(resource.data) && request.resource.data.createdBy == request.auth.uid;
+      allow delete: if isAuthenticated() && isOwner(resource.data);
     }
 
     match /consultations/{consultationId} {
-      allow read: if isActiveUser() && (resource == null || isOwner(resource.data));
-      allow create: if isActiveUser() && request.resource.data.createdBy == request.auth.uid;
-      allow update: if isActiveUser() && isOwner(resource.data) && request.resource.data.createdBy == request.auth.uid;
-      allow delete: if isActiveUser() && isOwner(resource.data);
+      allow read: if isAuthenticated() && (resource == null || isOwner(resource.data));
+      allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isAuthenticated() && isOwner(resource.data) && request.resource.data.createdBy == request.auth.uid;
+      allow delete: if isAuthenticated() && isOwner(resource.data);
+    }
+
+    match /prescriptions/{prescriptionId} {
+      allow read: if isAuthenticated() && (resource == null || isOwner(resource.data));
+      allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isAuthenticated() && isOwner(resource.data) && request.resource.data.createdBy == request.auth.uid;
+      allow delete: if isAuthenticated() && isOwner(resource.data);
     }
 
     match /userSessions/{userId} {
-      allow read, write: if (isActiveUser() && request.auth.uid == userId) || isAdmin();
+      allow read, write: if isAuthenticated() && request.auth.uid == userId;
     }
 
     match /test/connection {
