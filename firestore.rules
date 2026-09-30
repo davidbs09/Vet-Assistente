@@ -1,5 +1,5 @@
 rules_version = '2';
-// Version: 1.2 - Simplified for stability
+// Version: 1.4 - Password reset request flag visible to admin
 service cloud.firestore {
   match /databases/{database}/documents {
     // Helper Functions
@@ -24,18 +24,34 @@ service cloud.firestore {
     function isActiveUser() {
       return isAuthenticated()
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && userDoc().status == 'active';
+        && userDoc().status == 'active'
+        && userDoc().get('mustResetPassword', false) != true;
+    }
+
+    function passwordResetUnchanged() {
+      return request.resource.data.get('mustResetPassword', false) == resource.data.get('mustResetPassword', false)
+        && request.resource.data.get('passwordResetRequested', false) == resource.data.get('passwordResetRequested', false);
     }
 
     match /users/{userId} {
       allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
-      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow create: if isAuthenticated()
+        && request.auth.uid == userId
+        && request.resource.data.get('mustResetPassword', false) == false
+        && request.resource.data.get('passwordResetRequested', false) == false;
       allow update: if isAdmin()
         || (isAuthenticated()
             && request.auth.uid == userId
             && request.resource.data.status == resource.data.status
-            && request.resource.data.role == resource.data.role);
+            && request.resource.data.role == resource.data.role
+            && passwordResetUnchanged());
       allow delete: if isAdmin();
+    }
+
+    match /passwordResets/{hash} {
+      allow get: if true;
+      allow list: if isAdmin();
+      allow create, update, delete: if isAdmin();
     }
 
     match /patients/{patientId} {
@@ -53,7 +69,7 @@ service cloud.firestore {
     }
 
     match /userSessions/{userId} {
-      allow read, write: if isActiveUser() && request.auth.uid == userId;
+      allow read, write: if (isActiveUser() && request.auth.uid == userId) || isAdmin();
     }
 
     match /test/connection {

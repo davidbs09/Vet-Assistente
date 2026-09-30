@@ -11,9 +11,11 @@ import {
   setDoc,
   updateDoc,
   collection,
+  onSnapshot,
   serverTimestamp,
   User,
 } from '../firebase';
+import { validatePasswordPolicy } from '../shared/passwordPolicy';
 
 export const AUTH_TOKEN_KEY = 'vetai_auth_token';
 
@@ -41,16 +43,28 @@ export interface UserProfile {
   crmv?: string;
   role: UserRole;
   status: UserStatus;
+  mustResetPassword?: boolean;
+  passwordResetRequested?: boolean;
+  passwordResetRequestedAt?: unknown;
+  passwordResetAt?: unknown;
   createdAt?: unknown;
   activatedAt?: unknown;
   revokedAt?: unknown;
 }
 
+export type LoginSuccess = {
+  user: User;
+  profile: UserProfile;
+  token: string;
+};
+
+export type LoginResult = LoginSuccess | { needsPasswordReset: true; email: string };
+
 export interface RegisterPayload {
   email: string;
   password: string;
   displayName: string;
-  crmv?: string;
+  crmv: string;
 }
 
 const env = (import.meta as any).env || {};
@@ -78,12 +92,43 @@ export function isValidLoginIdentifier(identifier: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
-export function validateLoginCredentials(identifier: string, password: string): string | null {
+export function validateLoginIdentifier(identifier: string): string | null {
   if (!identifier.trim()) return 'Informe o usuário ou e-mail.';
-  if (!password) return 'Informe a senha.';
   if (!isValidLoginIdentifier(identifier)) return 'Informe um e-mail válido.';
+  return null;
+}
+
+export function validateLoginCredentials(identifier: string, password: string): string | null {
+  const identifierError = validateLoginIdentifier(identifier);
+  if (identifierError) return identifierError;
+  if (!password) return 'Informe a senha.';
   if (password.length < 6) return 'A senha precisa ter pelo menos 6 caracteres.';
   return null;
+}
+
+export function validateNewPassword(password: string, confirmPassword: string): string | null {
+  const policyError = validatePasswordPolicy(password);
+  if (policyError) return policyError === 'Informe a senha.' ? 'Informe a nova senha.' : policyError;
+  if (password !== confirmPassword) return 'As senhas não coincidem.';
+  return null;
+}
+
+export async function hashEmailKey(email: string): Promise<string> {
+  const bytes = new TextEncoder().encode(email.trim().toLowerCase());
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+export function isPasswordResetLogin(result: LoginResult): result is { needsPasswordReset: true; email: string } {
+  return 'needsPasswordReset' in result && result.needsPasswordReset === true;
+}
+
+export function requiresPasswordReset(profile?: UserProfile | null): boolean {
+  return profile?.mustResetPassword === true;
+}
+
+export function requestedPasswordReset(profile?: UserProfile | null): boolean {
+  return profile?.passwordResetRequested === true && !requiresPasswordReset(profile);
 }
 
 function authError(message: string, code: string): Error {
@@ -98,6 +143,7 @@ export function isAdminProfile(profile?: UserProfile | null, email?: string | nu
 
 export function canAccessApp(profile: UserProfile | null | undefined, email?: string | null): boolean {
   if (!profile) return false;
+  if (requiresPasswordReset(profile)) return false;
   if (isAdminProfile(profile, email)) return true;
   return profile.status === 'active';
 }
@@ -114,6 +160,13 @@ export async function assertActiveAccess(uid: string, email?: string | null): Pr
   const profile = await getUserProfile(uid);
   if (canAccessApp(profile, email) && profile) {
     return profile;
+  }
+
+  if (requiresPasswordReset(profile)) {
+    throw authError(
+      'Sua senha foi resetada pelo administrador. Deixe o campo de senha em branco e defina uma nova senha.',
+      'auth/password-reset-required'
+    );
   }
 
   const revoked = profile?.status === 'revoked';
@@ -188,6 +241,8 @@ export async function ensureUserProfile(
     crmv: extras?.crmv || '',
     role: isAdmin ? 'admin' : 'user',
     status: isAdmin ? 'active' : 'pending',
+    mustResetPassword: false,
+    passwordResetRequested: false,
     createdAt: serverTimestamp(),
     ...(isAdmin ? { activatedAt: serverTimestamp() } : {}),
   };
@@ -213,17 +268,118 @@ async function ensureBootstrapAdmin(email: string, password: string): Promise<vo
   }
 }
 
-export async function loginWithEmail(email: string, password: string): Promise<{
-  user: User;
-  profile: UserProfile;
-  token: string;
-}> {
-  const validationError = validateLoginCredentials(email, password);
-  if (validationError) {
-    throw authError(validationError, validationError.includes('e-mail válido') ? 'auth/invalid-email' : 'auth/invalid-credential');
+async function isPasswordResetRequired(identifier: string): Promise<boolean> {
+  const email = resolveLoginEmail(identifier);
+  const key = await hashEmailKey(email);
+  const snap = await getDoc(doc(db, 'passwordResets', key));
+  return snap.exists();
+}
+
+async function readApiError(response: Response): Promise<string> {
+  try {
+    const payload = await response.json() as { error?: string };
+    if (payload?.error) return payload.error;
+  } catch (_) {}
+  return 'Não foi possível concluir o reset de senha.';
+}
+
+export async function requestPasswordReset(identifier: string): Promise<void> {
+  const identifierError = validateLoginIdentifier(identifier);
+  if (identifierError) {
+    throw authError(identifierError, 'auth/invalid-email');
+  }
+
+  const response = await fetch('/api/auth/request-password-reset', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: resolveLoginEmail(identifier) }),
+  });
+
+  if (!response.ok) {
+    throw authError(await readApiError(response), 'auth/reset-request-failed');
+  }
+}
+
+export async function requestAdminPasswordReset(userId: string): Promise<void> {
+  const token = await getAuthToken(true);
+  if (!token) {
+    throw authError('Sessão de administrador inválida. Entre novamente.', 'auth/unauthenticated');
+  }
+
+  const response = await fetch('/api/admin/reset-password', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ userId }),
+  });
+
+  if (!response.ok) {
+    throw authError(await readApiError(response), 'auth/reset-failed');
+  }
+}
+
+export async function completePasswordReset(email: string, password: string): Promise<LoginSuccess> {
+  const identifierError = validateLoginIdentifier(email);
+  if (identifierError) {
+    throw authError(identifierError, 'auth/invalid-email');
+  }
+  const passwordError = validateNewPassword(password, password);
+  if (passwordError) {
+    throw authError(passwordError, 'auth/weak-password');
   }
 
   const resolvedEmail = resolveLoginEmail(email);
+  const response = await fetch('/api/auth/complete-password-reset', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: resolvedEmail, password }),
+  });
+
+  if (!response.ok) {
+    throw authError(await readApiError(response), 'auth/reset-complete-failed');
+  }
+
+  const result = await loginWithEmail(resolvedEmail, password);
+  if (isPasswordResetLogin(result)) {
+    throw authError(
+      'A nova senha foi salva, mas o reset ainda aparece pendente. Tente entrar novamente.',
+      'auth/password-reset-required'
+    );
+  }
+  return result;
+}
+
+export async function loginWithEmail(email: string, password: string): Promise<LoginResult> {
+  const identifierError = validateLoginIdentifier(email);
+  if (identifierError) {
+    throw authError(identifierError, identifierError.includes('e-mail válido') ? 'auth/invalid-email' : 'auth/invalid-credential');
+  }
+
+  const resolvedEmail = resolveLoginEmail(email);
+
+  if (!password) {
+    try {
+      if (await isPasswordResetRequired(resolvedEmail)) {
+        return { needsPasswordReset: true, email: resolvedEmail };
+      }
+    } catch (error: unknown) {
+      if (isPermissionDenied(error)) {
+        throw authError(
+          'Não foi possível verificar o reset de senha. Publique as regras atualizadas do arquivo firestore.rules.',
+          'permission-denied'
+        );
+      }
+      throw error;
+    }
+    throw authError('Informe a senha.', 'auth/invalid-credential');
+  }
+
+  if (password.length < 6) {
+    throw authError('A senha precisa ter pelo menos 6 caracteres.', 'auth/weak-password');
+  }
+
   try {
     await signInWithEmailAndPassword(auth, resolvedEmail, password);
   } catch (error: unknown) {
@@ -244,6 +400,12 @@ export async function loginWithEmail(email: string, password: string): Promise<{
   }
 
   const profile = await ensureUserProfile(currentUser);
+
+  if (requiresPasswordReset(profile) && !isAdminProfile(profile, currentUser.email)) {
+    clearAuthToken();
+    await signOut(auth);
+    throw authError('E-mail ou senha inválidos.', 'auth/invalid-credential');
+  }
 
   if (profile.status === 'revoked' && !isAdminProfile(profile, currentUser.email)) {
     clearAuthToken();
@@ -269,18 +431,59 @@ export async function loginWithEmail(email: string, password: string): Promise<{
 
 export async function registerWithEmail(payload: RegisterPayload): Promise<void> {
   const email = payload.email.trim();
+  if (!payload.displayName.trim()) {
+    throw authError('Informe o nome completo.', 'auth/invalid-credential');
+  }
+  if (!payload.crmv.trim()) {
+    throw authError('Informe o CRMV para solicitar o acesso.', 'auth/invalid-credential');
+  }
+  const passwordError = validatePasswordPolicy(payload.password);
+  if (passwordError) {
+    throw authError(passwordError, 'auth/weak-password');
+  }
+
+  const response = await fetch('/api/auth/request-access', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email,
+      password: payload.password,
+      displayName: payload.displayName.trim(),
+      crmv: payload.crmv.trim(),
+    }),
+  });
+
+  if (response.ok) return;
+
+  const apiError = await readApiError(response);
+  if (response.status === 409) {
+    throw authError(
+      apiError,
+      apiError.includes('Aguarde a ativação') ? 'auth/account-pending' : 'auth/email-already-in-use'
+    );
+  }
+  if (response.status !== 503) {
+    throw authError(apiError, 'auth/register-failed');
+  }
+
   beginAuthQuietPeriod();
   try {
-    const credential = await createUserWithEmailAndPassword(auth, email, payload.password);
-
-    if (payload.displayName) {
-      await updateProfile(credential.user, { displayName: payload.displayName });
+    try {
+      const credential = await createUserWithEmailAndPassword(auth, email, payload.password);
+      if (payload.displayName) {
+        await updateProfile(credential.user, { displayName: payload.displayName });
+      }
+      await ensureUserProfile(credential.user, {
+        displayName: payload.displayName,
+        crmv: payload.crmv.trim(),
+      });
+    } catch (error: unknown) {
+      const code = typeof error === 'object' && error && 'code' in error
+        ? String((error as { code?: string }).code)
+        : '';
+      if (code !== 'auth/email-already-in-use') throw error;
+      await finishExistingRegister(email, payload);
     }
-
-    await ensureUserProfile(credential.user, {
-      displayName: payload.displayName,
-      crmv: payload.crmv,
-    });
 
     clearAuthToken();
     await signOut(auth);
@@ -289,16 +492,87 @@ export async function registerWithEmail(payload: RegisterPayload): Promise<void>
   }
 }
 
+async function finishExistingRegister(email: string, payload: RegisterPayload): Promise<void> {
+  try {
+    await signInWithEmailAndPassword(auth, email, payload.password);
+  } catch {
+    throw authError(
+      'Este e-mail já possui cadastro. Entre com sua senha ou aguarde a ativação.',
+      'auth/email-already-in-use'
+    );
+  }
+
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    throw authError(
+      'Este e-mail já possui cadastro. Entre com sua senha ou aguarde a ativação.',
+      'auth/email-already-in-use'
+    );
+  }
+
+  const existing = await getUserProfile(currentUser.uid);
+  if (!existing) {
+    if (payload.displayName) {
+      await updateProfile(currentUser, { displayName: payload.displayName });
+    }
+    await ensureUserProfile(currentUser, {
+      displayName: payload.displayName,
+      crmv: payload.crmv.trim(),
+    });
+    return;
+  }
+
+  if (existing.status === 'pending') {
+    throw authError(
+      'Este e-mail já possui cadastro. Aguarde a ativação pelo administrador.',
+      'auth/account-pending'
+    );
+  }
+  if (existing.status === 'revoked') {
+    throw authError(
+      'Seu acesso foi removido pelo administrador. Solicite uma nova liberação.',
+      'auth/account-revoked'
+    );
+  }
+  throw authError(
+    'Este e-mail já possui cadastro. Entre com sua senha para acessar.',
+    'auth/email-already-in-use'
+  );
+}
+
+function sortUsers(users: UserProfile[]): UserProfile[] {
+  return [...users].sort((a, b) => {
+    const rank = (user: UserProfile) => {
+      if (requestedPasswordReset(user)) return 0;
+      if (requiresPasswordReset(user)) return 1;
+      if (user.status === 'pending') return 2;
+      if (user.status === 'active') return 3;
+      return 4;
+    };
+    const rankDiff = rank(a) - rank(b);
+    if (rankDiff !== 0) return rankDiff;
+    return (a.displayName || '').localeCompare(b.displayName || '');
+  });
+}
+
 export async function listUsers(): Promise<UserProfile[]> {
   const snapshot = await getDocs(collection(db, 'users'));
-  return snapshot.docs
-    .map((item) => ({ id: item.id, ...item.data() } as UserProfile))
-    .sort((a, b) => {
-      const order = { pending: 0, active: 1, revoked: 2 };
-      const statusDiff = (order[a.status] ?? 9) - (order[b.status] ?? 9);
-      if (statusDiff !== 0) return statusDiff;
-      return (a.displayName || '').localeCompare(b.displayName || '');
-    });
+  return sortUsers(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as UserProfile)));
+}
+
+export function subscribeUsers(
+  onUsers: (users: UserProfile[]) => void,
+  onError: (error: Error) => void
+): () => void {
+  return onSnapshot(
+    collection(db, 'users'),
+    (snapshot) => {
+      onUsers(sortUsers(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as UserProfile))));
+    },
+    (error) => {
+      onError(error instanceof Error ? error : new Error('Não foi possível carregar os usuários.'));
+    }
+  );
 }
 
 export async function activateUser(userId: string): Promise<void> {
@@ -328,6 +602,9 @@ export function mapAuthError(error: unknown): string {
   const message = error instanceof Error ? error.message : 'Não foi possível completar a operação.';
 
   if (code === 'permission-denied' || message.toLowerCase().includes('insufficient permissions')) {
+    if (message.toLowerCase().includes('reset de senha') || message.toLowerCase().includes('firestore.rules')) {
+      return message;
+    }
     return 'O login autenticou, mas o Firestore bloqueou a gravação do perfil. Publique as regras de security do arquivo firestore.rules no Console (Firestore > Regras).';
   }
 
@@ -336,6 +613,12 @@ export function mapAuthError(error: unknown): string {
       return message;
     case 'auth/account-revoked':
       return 'Seu acesso foi removido pelo administrador. Solicite uma nova liberação.';
+    case 'auth/password-reset-required':
+    case 'auth/reset-failed':
+    case 'auth/reset-complete-failed':
+    case 'auth/reset-request-failed':
+    case 'auth/register-failed':
+      return message;
     case 'auth/invalid-credential':
     case 'auth/wrong-password':
     case 'auth/user-not-found':
@@ -345,7 +628,9 @@ export function mapAuthError(error: unknown): string {
     case 'auth/email-already-in-use':
       return 'Este e-mail já possui cadastro. Entre com sua senha ou aguarde a ativação.';
     case 'auth/weak-password':
-      return 'A senha precisa ter pelo menos 6 caracteres.';
+      return message.includes('maiúscula') || message.includes('Exemplo')
+        ? message
+        : 'A senha precisa ter letra maiúscula, minúscula, número e caractere especial. Exemplo: Senha@123';
     case 'auth/too-many-requests':
       return 'Muitas tentativas. Aguarde um momento e tente novamente.';
     case 'auth/network-request-failed':

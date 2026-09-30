@@ -32,6 +32,10 @@ import {
   mapAuthError,
   persistAuthToken,
   registerWithEmail,
+  completePasswordReset,
+  isPasswordResetLogin,
+  requestPasswordReset,
+  requiresPasswordReset,
   UserProfile,
 } from './services/authService';
 import { clsx, type ClassValue } from 'clsx';
@@ -266,6 +270,8 @@ export default function App() {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loginSuccess, setLoginSuccess] = useState<string | null>(null);
+  const [passwordResetEmail, setPasswordResetEmail] = useState<string | null>(null);
+  const [passwordResetNonce, setPasswordResetNonce] = useState(0);
   const [authSubmitting, setAuthSubmitting] = useState(false);
   const [showDeployGuide, setShowDeployGuide] = useState(false);
   const [copiedSnippet, setCopiedSnippet] = useState<string | null>(null);
@@ -404,14 +410,19 @@ export default function App() {
         }
 
         if (!profile || !canAccessApp(profile, u.email)) {
-          const blockedMessage = profile?.status === 'revoked'
-            ? 'Seu acesso foi removido pelo administrador. Solicite uma nova liberação.'
-            : profile?.status === 'pending'
-              ? 'Sua conta ainda está pendente de ativação pelo administrador.'
-              : null;
+          const resetRequired = requiresPasswordReset(profile);
+          const blockedMessage = resetRequired
+            ? null
+            : profile?.status === 'revoked'
+              ? 'Seu acesso foi removido pelo administrador. Solicite uma nova liberação.'
+              : profile?.status === 'pending'
+                ? 'Sua conta ainda está pendente de ativação pelo administrador.'
+                : null;
           await logoutFromAuth();
           setUser(null);
           setUserProfile(null);
+          setPasswordResetEmail(resetRequired ? (profile?.email || u.email || null) : null);
+          if (resetRequired) setPasswordResetNonce((current) => current + 1);
           setLoginError(blockedMessage);
           setSessionStatus('checking');
           setLoading(false);
@@ -454,6 +465,7 @@ export default function App() {
       setUserProfile(profile);
 
       if (!canAccessApp(profile, user.email)) {
+        const resetRequired = requiresPasswordReset(profile);
         try {
           const sessionRef = doc(db, 'userSessions', user.uid);
           await updateDoc(sessionRef, { isActive: false });
@@ -464,10 +476,14 @@ export default function App() {
         setUserProfile(null);
         setSessionStatus('checking');
         setView('dashboard');
+        setPasswordResetEmail(resetRequired ? (profile.email || user.email || null) : null);
+        if (resetRequired) setPasswordResetNonce((current) => current + 1);
         setLoginError(
-          profile.status === 'revoked'
-            ? 'Seu acesso foi removido pelo administrador. Solicite uma nova liberação.'
-            : 'Sua conta ainda está pendente de ativação pelo administrador.'
+          resetRequired
+            ? null
+            : profile.status === 'revoked'
+              ? 'Seu acesso foi removido pelo administrador. Solicite uma nova liberação.'
+              : 'Sua conta ainda está pendente de ativação pelo administrador.'
         );
       }
     }, (error) => {
@@ -477,7 +493,8 @@ export default function App() {
     return () => unsubscribeProfile();
   }, [user]);
 
-  const dropBlockedAccess = async (message: string) => {
+  const dropBlockedAccess = async (message: string, resetEmail?: string | null) => {
+    const emailForReset = resetEmail || (message.includes('senha foi resetada') ? (user?.email || userProfile?.email || null) : null);
     try {
       if (user) {
         await updateDoc(doc(db, 'userSessions', user.uid), { isActive: false });
@@ -491,7 +508,9 @@ export default function App() {
     setConflictDetails(null);
     setView('dashboard');
     setSelectedPatient(null);
-    setLoginError(message);
+    setPasswordResetEmail(emailForReset);
+    if (emailForReset) setPasswordResetNonce((current) => current + 1);
+    setLoginError(emailForReset ? null : message);
   };
 
   const enforceAccessOnRequest = async () => {
@@ -518,8 +537,18 @@ export default function App() {
           isActive: true
         });
       } catch (err) {
-        if (isPermissionDenied(err) || (typeof err === 'object' && err && 'code' in err && String((err as { code?: string }).code).startsWith('auth/account-'))) {
-          await dropBlockedAccess(mapAuthError(err));
+        const code = typeof err === 'object' && err && 'code' in err
+          ? String((err as { code?: string }).code)
+          : '';
+        if (
+          isPermissionDenied(err)
+          || code.startsWith('auth/account-')
+          || code === 'auth/password-reset-required'
+        ) {
+          await dropBlockedAccess(
+            mapAuthError(err),
+            code === 'auth/password-reset-required' ? user.email : null
+          );
           return;
         }
         console.error('Heartbeat update failed:', err);
@@ -610,6 +639,13 @@ export default function App() {
       setSessionStatus('checking');
       markBrowserSession();
       const result = await loginWithEmail(email, password);
+      if (isPasswordResetLogin(result)) {
+        clearBrowserSession();
+        setPasswordResetEmail(result.email);
+        setPasswordResetNonce((current) => current + 1);
+        return;
+      }
+      setPasswordResetEmail(null);
       setUser(result.user);
       setUserProfile(result.profile);
     } catch (error: unknown) {
@@ -617,6 +653,42 @@ export default function App() {
       clearBrowserSession();
       setSessionStatus('checking');
       setLoginError(mapAuthError(error));
+    } finally {
+      setAuthSubmitting(false);
+    }
+  };
+
+  const handleCompletePasswordReset = async (email: string, password: string) => {
+    try {
+      setAuthSubmitting(true);
+      setLoginError(null);
+      setLoginSuccess(null);
+      setSessionStatus('checking');
+      markBrowserSession();
+      const result = await completePasswordReset(email, password);
+      setPasswordResetEmail(null);
+      setUser(result.user);
+      setUserProfile(result.profile);
+    } catch (error: unknown) {
+      console.error('Password reset complete error:', error);
+      clearBrowserSession();
+      setSessionStatus('checking');
+      setLoginError(mapAuthError(error));
+    } finally {
+      setAuthSubmitting(false);
+    }
+  };
+
+  const handleRequestPasswordReset = async (email: string) => {
+    try {
+      setAuthSubmitting(true);
+      setLoginError(null);
+      setLoginSuccess(null);
+      await requestPasswordReset(email);
+    } catch (error: unknown) {
+      console.error('Password reset request error:', error);
+      setLoginError(mapAuthError(error));
+      throw error;
     } finally {
       setAuthSubmitting(false);
     }
@@ -634,6 +706,7 @@ export default function App() {
     } catch (error: unknown) {
       console.error('Register error:', error);
       setLoginError(mapAuthError(error));
+      throw error;
     } finally {
       setAuthSubmitting(false);
     }
@@ -660,6 +733,7 @@ export default function App() {
     setConflictDetails(null);
     setLoginError(null);
     setLoginSuccess(null);
+    setPasswordResetEmail(null);
     setView('dashboard');
     setSelectedPatient(null);
   };
@@ -766,6 +840,10 @@ export default function App() {
         <LoginPage
           onLogin={handleLogin}
           onRegister={handleRegister}
+          onCompletePasswordReset={handleCompletePasswordReset}
+          onRequestPasswordReset={handleRequestPasswordReset}
+          passwordResetEmail={passwordResetEmail}
+          passwordResetNonce={passwordResetNonce}
           error={loginError}
           success={loginSuccess}
           submitting={authSubmitting}

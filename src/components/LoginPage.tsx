@@ -2,9 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AlertCircle, CheckCircle2, Eye, EyeOff, Loader2, Lock, Stethoscope, ShieldCheck } from 'lucide-react';
 import fundoLogin from '../source/fundo-login.png';
-import { validateLoginCredentials } from '../services/authService';
+import { validateLoginIdentifier, validateNewPassword } from '../services/authService';
+import { PASSWORD_POLICY_MESSAGE } from '../shared/passwordPolicy';
 
-export type LoginPageView = 'home' | 'login' | 'register';
+export type LoginPageView = 'home' | 'login' | 'register' | 'forgot' | 'new-password';
 
 export interface RegisterFormValues {
   displayName: string;
@@ -16,6 +17,10 @@ export interface RegisterFormValues {
 export interface LoginPageProps {
   onLogin: (email: string, password: string) => Promise<void>;
   onRegister: (values: RegisterFormValues) => Promise<void>;
+  onCompletePasswordReset: (email: string, password: string) => Promise<void>;
+  onRequestPasswordReset: (email: string) => Promise<void>;
+  passwordResetEmail?: string | null;
+  passwordResetNonce?: number;
   error?: string | null;
   success?: string | null;
   submitting?: boolean;
@@ -74,6 +79,10 @@ function PasswordField({
 export default function LoginPage({
   onLogin,
   onRegister,
+  onCompletePasswordReset,
+  onRequestPasswordReset,
+  passwordResetEmail = null,
+  passwordResetNonce = 0,
   error,
   success,
   submitting = false,
@@ -86,6 +95,7 @@ export default function LoginPage({
   const [crmv, setCrmv] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
+  const [forgotSent, setForgotSent] = useState(false);
 
   const feedback = formError || error;
 
@@ -95,6 +105,15 @@ export default function LoginPage({
     }
   }, [error, view]);
 
+  useEffect(() => {
+    if (!passwordResetEmail) return;
+    setEmail(passwordResetEmail);
+    setPassword('');
+    setConfirmPassword('');
+    setFormError(null);
+    setView('new-password');
+  }, [passwordResetEmail, passwordResetNonce]);
+
   const resetForm = () => {
     setPassword('');
     setConfirmPassword('');
@@ -103,37 +122,71 @@ export default function LoginPage({
 
   const goTo = (next: LoginPageView) => {
     resetForm();
+    setForgotSent(false);
     setView(next);
   };
 
   const handleLoginSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setFormError(null);
-    const validationError = validateLoginCredentials(email, password);
-    if (validationError) {
-      setFormError(validationError);
+    const identifierError = validateLoginIdentifier(email);
+    if (identifierError) {
+      setFormError(identifierError);
+      return;
+    }
+    if (password && password.length < 6) {
+      setFormError('A senha precisa ter pelo menos 6 caracteres.');
       return;
     }
     await onLogin(email.trim(), password);
   };
 
+  const handleNewPasswordSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setFormError(null);
+    const identifierError = validateLoginIdentifier(email);
+    if (identifierError) {
+      setFormError(identifierError);
+      return;
+    }
+    const passwordError = validateNewPassword(password, confirmPassword);
+    if (passwordError) {
+      setFormError(passwordError);
+      return;
+    }
+    await onCompletePasswordReset(email.trim(), password);
+  };
+
+  const handleForgotSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setFormError(null);
+    const identifierError = validateLoginIdentifier(email);
+    if (identifierError) {
+      setFormError(identifierError);
+      return;
+    }
+    try {
+      await onRequestPasswordReset(email.trim());
+      setForgotSent(true);
+    } catch (_) {
+      // App already maps the error.
+    }
+  };
+
   const handleRegisterSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setFormError(null);
-    if (!displayName.trim() || !email.trim() || !password) {
-      setFormError('Preencha nome, e-mail e senha para solicitar o acesso.');
+    if (!displayName.trim() || !email.trim() || !crmv.trim() || !password) {
+      setFormError('Preencha nome, e-mail, CRMV e senha para solicitar o acesso.');
       return;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       setFormError('Informe um e-mail válido.');
       return;
     }
-    if (password.length < 6) {
-      setFormError('A senha precisa ter pelo menos 6 caracteres.');
-      return;
-    }
-    if (password !== confirmPassword) {
-      setFormError('As senhas não coincidem.');
+    const passwordError = validateNewPassword(password, confirmPassword);
+    if (passwordError) {
+      setFormError(passwordError);
       return;
     }
     try {
@@ -249,7 +302,13 @@ export default function LoginPage({
             <div className="mt-6 space-y-2 rounded-xl border border-rose-200 bg-rose-50 p-4 text-left text-xs text-rose-800">
               <div className="flex items-center gap-1.5 font-semibold text-rose-900">
                 <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
-                {feedback.includes('pendente') ? 'Acesso pendente' : 'Não foi possível autenticar'}
+                {feedback.includes('pendente')
+                  ? 'Acesso pendente'
+                  : view === 'register'
+                    ? 'Não foi possível enviar a solicitação'
+                    : view === 'new-password'
+                      ? 'Não foi possível salvar a nova senha'
+                      : 'Não foi possível autenticar'}
               </div>
               <p className="leading-relaxed">{feedback}</p>
             </div>
@@ -333,6 +392,7 @@ export default function LoginPage({
                     if (formError) setFormError(null);
                   }}
                   disabled={submitting}
+                  required={false}
                 />
                 <button
                   type="submit"
@@ -340,6 +400,13 @@ export default function LoginPage({
                   className="inline-flex w-full items-center justify-center rounded-lg bg-slate-900 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-slate-800 disabled:opacity-60 cursor-pointer"
                 >
                   {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Entrar'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => goTo('forgot')}
+                  className="w-full text-center text-xs font-medium text-slate-600 hover:text-slate-800 cursor-pointer"
+                >
+                  Esqueceu a senha?
                 </button>
                 <button
                   type="button"
@@ -401,7 +468,7 @@ export default function LoginPage({
                       value={crmv}
                       onChange={(e) => setCrmv(e.target.value)}
                       disabled={submitting}
-                      placeholder="Opcional"
+                      required
                     />
                   </div>
                 </div>
@@ -423,6 +490,9 @@ export default function LoginPage({
                     disabled={submitting}
                   />
                 </div>
+                <p className="text-[11px] leading-relaxed text-slate-500">
+                  {PASSWORD_POLICY_MESSAGE}
+                </p>
                 <button
                   type="submit"
                   disabled={submitting}
@@ -436,6 +506,127 @@ export default function LoginPage({
                   className="w-full text-center text-xs font-medium text-slate-600 hover:text-slate-800 cursor-pointer"
                 >
                   Já tenho senha — entrar
+                </button>
+              </motion.form>
+            )}
+
+            {view === 'forgot' && (
+              <motion.form
+                key="forgot-form"
+                onSubmit={handleForgotSubmit}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                className="mt-8 space-y-4 rounded-2xl border border-slate-200 bg-white/90 p-5 shadow-sm backdrop-blur"
+              >
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900">Resetar senha</h2>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Informe o e-mail da conta. Em seguida você verá como seguir com o administrador.
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-slate-600" htmlFor="forgot-email">E-mail</label>
+                  <input
+                    id="forgot-email"
+                    type="email"
+                    autoComplete="email"
+                    className={inputClass}
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      if (formError) setFormError(null);
+                      if (forgotSent) setForgotSent(false);
+                    }}
+                    disabled={submitting}
+                    placeholder="seu@email.com"
+                    required
+                  />
+                </div>
+                {forgotSent && (
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs leading-relaxed text-emerald-800">
+                    Pedido registrado. Entre em contato com o ADMIN para resetar a senha desta conta.
+                    Depois disso, no próximo login, deixe a senha em branco e defina uma nova.
+                  </div>
+                )}
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="inline-flex w-full items-center justify-center rounded-lg bg-slate-900 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-slate-800 disabled:opacity-60 cursor-pointer"
+                >
+                  {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Enviar pedido de reset'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => goTo('login')}
+                  className="w-full text-center text-xs font-medium text-slate-600 hover:text-slate-800 cursor-pointer"
+                >
+                  Voltar para o login
+                </button>
+              </motion.form>
+            )}
+
+            {view === 'new-password' && (
+              <motion.form
+                key="new-password-form"
+                onSubmit={handleNewPasswordSubmit}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                className="mt-8 space-y-4 rounded-2xl border border-slate-200 bg-white/90 p-5 shadow-sm backdrop-blur"
+              >
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900">Definir nova senha</h2>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Sua senha anterior foi apagada pelo administrador. Crie uma nova senha para entrar no sistema.
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-slate-600" htmlFor="reset-email">E-mail</label>
+                  <input
+                    id="reset-email"
+                    type="text"
+                    autoComplete="username"
+                    className={inputClass}
+                    value={email}
+                    readOnly
+                    disabled
+                  />
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <PasswordField
+                    id="reset-password"
+                    label="Nova senha"
+                    autoComplete="new-password"
+                    value={password}
+                    onChange={setPassword}
+                    disabled={submitting}
+                  />
+                  <PasswordField
+                    id="reset-confirm"
+                    label="Confirmar nova senha"
+                    autoComplete="new-password"
+                    value={confirmPassword}
+                    onChange={setConfirmPassword}
+                    disabled={submitting}
+                  />
+                </div>
+                <p className="text-[11px] leading-relaxed text-slate-500">
+                  {PASSWORD_POLICY_MESSAGE}
+                </p>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="inline-flex w-full items-center justify-center rounded-lg bg-emerald-700 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-800 disabled:opacity-60 cursor-pointer"
+                >
+                  {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Salvar senha e entrar'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => goTo('login')}
+                  className="w-full text-center text-xs font-medium text-slate-600 hover:text-slate-800 cursor-pointer"
+                >
+                  Voltar para o login
                 </button>
               </motion.form>
             )}
