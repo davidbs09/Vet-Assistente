@@ -17,8 +17,22 @@ import {
 
 export const AUTH_TOKEN_KEY = 'vetai_auth_token';
 
+let authListenerQuietCount = 0;
+
+export function beginAuthQuietPeriod(): void {
+  authListenerQuietCount += 1;
+}
+
+export function endAuthQuietPeriod(): void {
+  authListenerQuietCount = Math.max(0, authListenerQuietCount - 1);
+}
+
+export function isAuthListenerQuiet(): boolean {
+  return authListenerQuietCount > 0;
+}
+
 export type UserRole = 'admin' | 'user';
-export type UserStatus = 'pending' | 'active';
+export type UserStatus = 'pending' | 'active' | 'revoked';
 
 export interface UserProfile {
   id: string;
@@ -29,6 +43,7 @@ export interface UserProfile {
   status: UserStatus;
   createdAt?: unknown;
   activatedAt?: unknown;
+  revokedAt?: unknown;
 }
 
 export interface RegisterPayload {
@@ -56,8 +71,58 @@ export function resolveLoginEmail(identifier: string): string {
   return identifier.trim();
 }
 
+export function isValidLoginIdentifier(identifier: string): boolean {
+  const value = identifier.trim();
+  if (!value) return false;
+  if (value.toLowerCase() === adminUsername || value.toLowerCase() === 'admin') return true;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+export function validateLoginCredentials(identifier: string, password: string): string | null {
+  if (!identifier.trim()) return 'Informe o usuário ou e-mail.';
+  if (!password) return 'Informe a senha.';
+  if (!isValidLoginIdentifier(identifier)) return 'Informe um e-mail válido.';
+  if (password.length < 6) return 'A senha precisa ter pelo menos 6 caracteres.';
+  return null;
+}
+
+function authError(message: string, code: string): Error {
+  const error = new Error(message);
+  (error as Error & { code?: string }).code = code;
+  return error;
+}
+
 export function isAdminProfile(profile?: UserProfile | null, email?: string | null): boolean {
   return profile?.role === 'admin' || isAdminEmail(email || profile?.email);
+}
+
+export function canAccessApp(profile: UserProfile | null | undefined, email?: string | null): boolean {
+  if (!profile) return false;
+  if (isAdminProfile(profile, email)) return true;
+  return profile.status === 'active';
+}
+
+export function isPermissionDenied(error: unknown): boolean {
+  const code = typeof error === 'object' && error && 'code' in error
+    ? String((error as { code?: string }).code)
+    : '';
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+  return code === 'permission-denied' || message.includes('insufficient permissions');
+}
+
+export async function assertActiveAccess(uid: string, email?: string | null): Promise<UserProfile> {
+  const profile = await getUserProfile(uid);
+  if (canAccessApp(profile, email) && profile) {
+    return profile;
+  }
+
+  const revoked = profile?.status === 'revoked';
+  throw authError(
+    revoked
+      ? 'Seu acesso foi removido pelo administrador. Solicite uma nova liberação.'
+      : 'Sua conta ainda está pendente de ativação pelo administrador.',
+    revoked ? 'auth/account-revoked' : 'auth/account-pending'
+  );
 }
 
 export function getStoredAuthToken(): string | null {
@@ -153,6 +218,11 @@ export async function loginWithEmail(email: string, password: string): Promise<{
   profile: UserProfile;
   token: string;
 }> {
+  const validationError = validateLoginCredentials(email, password);
+  if (validationError) {
+    throw authError(validationError, validationError.includes('e-mail válido') ? 'auth/invalid-email' : 'auth/invalid-credential');
+  }
+
   const resolvedEmail = resolveLoginEmail(email);
   try {
     await signInWithEmailAndPassword(auth, resolvedEmail, password);
@@ -170,19 +240,27 @@ export async function loginWithEmail(email: string, password: string): Promise<{
 
   const currentUser = auth.currentUser;
   if (!currentUser) {
-    throw new Error('Não foi possível autenticar o administrador.');
+    throw authError('Não foi possível autenticar. Tente novamente.', 'auth/invalid-credential');
   }
 
   const profile = await ensureUserProfile(currentUser);
 
+  if (profile.status === 'revoked' && !isAdminProfile(profile, currentUser.email)) {
+    clearAuthToken();
+    await signOut(auth);
+    throw authError(
+      'Seu acesso foi removido pelo administrador. Solicite uma nova liberação.',
+      'auth/account-revoked'
+    );
+  }
+
   if (profile.status !== 'active' && !isAdminProfile(profile, currentUser.email)) {
     clearAuthToken();
     await signOut(auth);
-    const error = new Error(
-      'Sua conta ainda está pendente de ativação pelo administrador. Você receberá acesso assim que for liberada.'
+    throw authError(
+      'Sua conta ainda está pendente de ativação pelo administrador. Você receberá acesso assim que for liberada.',
+      'auth/account-pending'
     );
-    (error as Error & { code?: string }).code = 'auth/account-pending';
-    throw error;
   }
 
   const token = await persistAuthToken(currentUser);
@@ -191,19 +269,24 @@ export async function loginWithEmail(email: string, password: string): Promise<{
 
 export async function registerWithEmail(payload: RegisterPayload): Promise<void> {
   const email = payload.email.trim();
-  const credential = await createUserWithEmailAndPassword(auth, email, payload.password);
+  beginAuthQuietPeriod();
+  try {
+    const credential = await createUserWithEmailAndPassword(auth, email, payload.password);
 
-  if (payload.displayName) {
-    await updateProfile(credential.user, { displayName: payload.displayName });
+    if (payload.displayName) {
+      await updateProfile(credential.user, { displayName: payload.displayName });
+    }
+
+    await ensureUserProfile(credential.user, {
+      displayName: payload.displayName,
+      crmv: payload.crmv,
+    });
+
+    clearAuthToken();
+    await signOut(auth);
+  } finally {
+    endAuthQuietPeriod();
   }
-
-  await ensureUserProfile(credential.user, {
-    displayName: payload.displayName,
-    crmv: payload.crmv,
-  });
-
-  clearAuthToken();
-  await signOut(auth);
 }
 
 export async function listUsers(): Promise<UserProfile[]> {
@@ -211,7 +294,9 @@ export async function listUsers(): Promise<UserProfile[]> {
   return snapshot.docs
     .map((item) => ({ id: item.id, ...item.data() } as UserProfile))
     .sort((a, b) => {
-      if (a.status !== b.status) return a.status === 'pending' ? -1 : 1;
+      const order = { pending: 0, active: 1, revoked: 2 };
+      const statusDiff = (order[a.status] ?? 9) - (order[b.status] ?? 9);
+      if (statusDiff !== 0) return statusDiff;
       return (a.displayName || '').localeCompare(b.displayName || '');
     });
 }
@@ -220,6 +305,14 @@ export async function activateUser(userId: string): Promise<void> {
   await updateDoc(usersRef(userId), {
     status: 'active',
     activatedAt: serverTimestamp(),
+    revokedAt: null,
+  });
+}
+
+export async function revokeUserAccess(userId: string): Promise<void> {
+  await updateDoc(usersRef(userId), {
+    status: 'revoked',
+    revokedAt: serverTimestamp(),
   });
 }
 
@@ -241,11 +334,14 @@ export function mapAuthError(error: unknown): string {
   switch (code) {
     case 'auth/account-pending':
       return message;
+    case 'auth/account-revoked':
+      return 'Seu acesso foi removido pelo administrador. Solicite uma nova liberação.';
     case 'auth/invalid-credential':
     case 'auth/wrong-password':
     case 'auth/user-not-found':
-    case 'auth/invalid-email':
       return 'E-mail ou senha inválidos.';
+    case 'auth/invalid-email':
+      return 'Informe um e-mail válido.';
     case 'auth/email-already-in-use':
       return 'Este e-mail já possui cadastro. Entre com sua senha ou aguarde a ativação.';
     case 'auth/weak-password':

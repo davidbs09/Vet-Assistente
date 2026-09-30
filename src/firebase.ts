@@ -1,6 +1,8 @@
 import { initializeApp, getApps } from 'firebase/app';
 import {
   getAuth,
+  setPersistence,
+  browserLocalPersistence,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   updateProfile,
@@ -40,6 +42,9 @@ const firebaseConfig = {
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 export const auth = getAuth(app);
+void setPersistence(auth, browserLocalPersistence).catch(() => {
+  // If persistence is unavailable (private mode, blocked storage), login still works.
+});
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId || undefined);
 
 export {

@@ -20,7 +20,13 @@ import AdminUsersPage from './components/AdminUsersPage';
 import {
   clearAuthToken,
   ensureUserProfile,
+  getUserProfile,
+  isAdminEmail,
   isAdminProfile,
+  isAuthListenerQuiet,
+  canAccessApp,
+  assertActiveAccess,
+  isPermissionDenied,
   loginWithEmail,
   logoutFromAuth,
   mapAuthError,
@@ -35,14 +41,54 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-function getOrCreateSessionId(): string {
-  let sid = sessionStorage.getItem('vetai_session_id');
-  if (!sid) {
-    sid = typeof crypto !== 'undefined' && crypto.randomUUID 
-      ? crypto.randomUUID() 
-      : 'sess_' + Math.random().toString(36).substring(2) + '_' + Date.now();
-    sessionStorage.setItem('vetai_session_id', sid);
+const SESSION_ID_COOKIE = 'vetai_session_id';
+const SESSION_ALIVE_COOKIE = 'vetai_alive';
+
+function readCookie(name: string): string | null {
+  if (typeof document === 'undefined') return null;
+  const prefix = `${name}=`;
+  const found = document.cookie.split(';').map((part) => part.trim()).find((part) => part.startsWith(prefix));
+  return found ? decodeURIComponent(found.slice(prefix.length)) : null;
+}
+
+function writeSessionCookie(name: string, value: string): void {
+  if (typeof document === 'undefined') return;
+  document.cookie = `${name}=${encodeURIComponent(value)}; path=/; SameSite=Lax`;
+}
+
+function clearSessionCookie(name: string): void {
+  if (typeof document === 'undefined') return;
+  document.cookie = `${name}=; path=/; max-age=0`;
+}
+
+function hasBrowserSession(): boolean {
+  return Boolean(readCookie(SESSION_ALIVE_COOKIE) && readCookie(SESSION_ID_COOKIE));
+}
+
+function markBrowserSession(): void {
+  writeSessionCookie(SESSION_ALIVE_COOKIE, '1');
+  getOrCreateSessionId();
+}
+
+function clearBrowserSession(): void {
+  clearSessionCookie(SESSION_ALIVE_COOKIE);
+  clearSessionCookie(SESSION_ID_COOKIE);
+  if (typeof sessionStorage !== 'undefined') {
+    sessionStorage.removeItem('vetai_session_id');
   }
+}
+
+function getOrCreateSessionId(): string {
+  let sid = readCookie(SESSION_ID_COOKIE);
+  if (!sid && typeof sessionStorage !== 'undefined') {
+    sid = sessionStorage.getItem('vetai_session_id');
+  }
+  if (!sid) {
+    sid = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : 'sess_' + Math.random().toString(36).substring(2) + '_' + Date.now();
+  }
+  writeSessionCookie(SESSION_ID_COOKIE, sid);
   return sid;
 }
 
@@ -273,12 +319,14 @@ export default function App() {
         deviceInfo: typeof navigator !== 'undefined' ? navigator.userAgent : 'Web'
       }, { merge: true });
 
+      markBrowserSession();
       setConflictDetails(null);
       setSessionStatus('active');
     } catch (err: any) {
       console.error('Error verifying session:', err);
       handleFirestoreError(err, OperationType.WRITE, 'userSessions');
-      setSessionStatus('active');
+      setSessionError('Não foi possível validar o login único. Tente novamente.');
+      setSessionStatus('conflict');
     } finally {
       setCheckingConflict(false);
     }
@@ -300,6 +348,7 @@ export default function App() {
         updatedAt: serverTimestamp(),
         deviceInfo: typeof navigator !== 'undefined' ? navigator.userAgent : 'Web'
       });
+      markBrowserSession();
       setConflictDetails(null);
       setSessionStatus('active');
     } catch (err: any) {
@@ -318,6 +367,11 @@ export default function App() {
   useEffect(() => {
     testConnection();
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
+      if (isAuthListenerQuiet()) {
+        setLoading(false);
+        return;
+      }
+
       if (!u) {
         clearAuthToken();
         setUser(null);
@@ -328,14 +382,37 @@ export default function App() {
         return;
       }
 
+      if (!hasBrowserSession()) {
+        try {
+          await updateDoc(doc(db, 'userSessions', u.uid), { isActive: false });
+        } catch (_) {}
+        await logoutFromAuth();
+        clearBrowserSession();
+        setUser(null);
+        setUserProfile(null);
+        setSessionStatus('checking');
+        setConflictDetails(null);
+        setLoginError(null);
+        setLoading(false);
+        return;
+      }
+
       try {
-        const profile = await ensureUserProfile(u);
-        if (profile.status !== 'active' && !isAdminProfile(profile, u.email)) {
-          clearAuthToken();
-          await signOut(auth);
+        let profile = await getUserProfile(u.uid);
+        if (!profile && isAdminEmail(u.email)) {
+          profile = await ensureUserProfile(u);
+        }
+
+        if (!profile || !canAccessApp(profile, u.email)) {
+          const blockedMessage = profile?.status === 'revoked'
+            ? 'Seu acesso foi removido pelo administrador. Solicite uma nova liberação.'
+            : profile?.status === 'pending'
+              ? 'Sua conta ainda está pendente de ativação pelo administrador.'
+              : null;
+          await logoutFromAuth();
           setUser(null);
           setUserProfile(null);
-          setLoginError('Sua conta ainda está pendente de ativação pelo administrador.');
+          setLoginError(blockedMessage);
           setSessionStatus('checking');
           setLoading(false);
           return;
@@ -348,15 +425,81 @@ export default function App() {
         await checkSession(u);
       } catch (err) {
         console.error('Error restoring authenticated session:', err);
-        setLoginError(mapAuthError(err));
+        try {
+          await logoutFromAuth();
+        } catch (_) {}
         setUser(null);
         setUserProfile(null);
+        setSessionStatus('checking');
+        setConflictDetails(null);
+        setLoginError(null);
       } finally {
         setLoading(false);
       }
     });
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const unsubscribeProfile = onSnapshot(doc(db, 'users', user.uid), async (snapshot) => {
+      if (isAuthListenerQuiet()) return;
+
+      if (!snapshot.exists()) {
+        return;
+      }
+
+      const profile = { id: snapshot.id, ...snapshot.data() } as UserProfile;
+      setUserProfile(profile);
+
+      if (!canAccessApp(profile, user.email)) {
+        try {
+          const sessionRef = doc(db, 'userSessions', user.uid);
+          await updateDoc(sessionRef, { isActive: false });
+        } catch (_) {}
+        clearBrowserSession();
+        await logoutFromAuth();
+        setUser(null);
+        setUserProfile(null);
+        setSessionStatus('checking');
+        setView('dashboard');
+        setLoginError(
+          profile.status === 'revoked'
+            ? 'Seu acesso foi removido pelo administrador. Solicite uma nova liberação.'
+            : 'Sua conta ainda está pendente de ativação pelo administrador.'
+        );
+      }
+    }, (error) => {
+      console.error('Profile listener error:', error);
+    });
+
+    return () => unsubscribeProfile();
+  }, [user]);
+
+  const dropBlockedAccess = async (message: string) => {
+    try {
+      if (user) {
+        await updateDoc(doc(db, 'userSessions', user.uid), { isActive: false });
+      }
+    } catch (_) {}
+    clearBrowserSession();
+    await logoutFromAuth();
+    setUser(null);
+    setUserProfile(null);
+    setSessionStatus('checking');
+    setConflictDetails(null);
+    setView('dashboard');
+    setSelectedPatient(null);
+    setLoginError(message);
+  };
+
+  const enforceAccessOnRequest = async () => {
+    if (!user) throw new Error('Usuário não autenticado.');
+    const profile = await assertActiveAccess(user.uid, user.email);
+    setUserProfile(profile);
+    return profile;
+  };
 
   // Heartbeat & Real-time conflict enforcement
   useEffect(() => {
@@ -368,11 +511,17 @@ export default function App() {
     // 1. Send heartbeat every 15 seconds
     const heartbeatInterval = setInterval(async () => {
       try {
+        const profile = await assertActiveAccess(user.uid, user.email);
+        setUserProfile(profile);
         await updateDoc(sessionRef, {
           lastActive: serverTimestamp(),
           isActive: true
         });
       } catch (err) {
+        if (isPermissionDenied(err) || (typeof err === 'object' && err && 'code' in err && String((err as { code?: string }).code).startsWith('auth/account-'))) {
+          await dropBlockedAccess(mapAuthError(err));
+          return;
+        }
         console.error('Heartbeat update failed:', err);
       }
     }, 15000);
@@ -387,7 +536,11 @@ export default function App() {
           signOut(auth);
         }
       }
-    }, (error) => {
+    }, async (error) => {
+      if (isPermissionDenied(error)) {
+        await dropBlockedAccess('Seu acesso foi removido pelo administrador. Solicite uma nova liberação.');
+        return;
+      }
       console.error('Session listener error:', error);
     });
 
@@ -401,7 +554,6 @@ export default function App() {
   useEffect(() => {
     const handleBeforeUnload = () => {
       if (user && sessionStatus === 'active') {
-        const localSid = sessionStorage.getItem('vetai_session_id');
         const sessionRef = doc(db, 'userSessions', user.uid);
         try {
           updateDoc(sessionRef, { isActive: false });
@@ -420,8 +572,11 @@ export default function App() {
       // Sort by createdAt descending
       docs.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
       setPatients(docs);
-    }, (error) => {
+    }, async (error) => {
       handleFirestoreError(error, OperationType.LIST, 'patients');
+      if (isPermissionDenied(error)) {
+        await dropBlockedAccess('Seu acesso foi removido pelo administrador. Solicite uma nova liberação.');
+      }
     });
     return () => unsubscribe();
   }, [user, sessionStatus]);
@@ -438,8 +593,11 @@ export default function App() {
       // Sort by date descending
       docs.sort((a, b) => (b.date?.seconds || 0) - (a.date?.seconds || 0));
       setConsultations(docs);
-    }, (error) => {
+    }, async (error) => {
       handleFirestoreError(error, OperationType.LIST, 'consultations');
+      if (isPermissionDenied(error)) {
+        await dropBlockedAccess('Seu acesso foi removido pelo administrador. Solicite uma nova liberação.');
+      }
     });
     return () => unsubscribe();
   }, [selectedPatient, user, sessionStatus]);
@@ -450,11 +608,13 @@ export default function App() {
       setLoginError(null);
       setLoginSuccess(null);
       setSessionStatus('checking');
+      markBrowserSession();
       const result = await loginWithEmail(email, password);
       setUser(result.user);
       setUserProfile(result.profile);
     } catch (error: unknown) {
       console.error('Login error:', error);
+      clearBrowserSession();
       setSessionStatus('checking');
       setLoginError(mapAuthError(error));
     } finally {
@@ -482,7 +642,7 @@ export default function App() {
   const handleLogout = async () => {
     if (user) {
       try {
-        const localSid = sessionStorage.getItem('vetai_session_id');
+        const localSid = getOrCreateSessionId();
         const sessionRef = doc(db, 'userSessions', user.uid);
         const snap = await getDoc(sessionRef);
         if (snap.exists() && snap.data().sessionId === localSid) {
@@ -492,7 +652,7 @@ export default function App() {
         console.error('Error updating session on logout:', err);
       }
     }
-    sessionStorage.removeItem('vetai_session_id');
+    clearBrowserSession();
     await logoutFromAuth();
     setUser(null);
     setUserProfile(null);
@@ -507,6 +667,12 @@ export default function App() {
   const addPatient = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!user) return;
+    try {
+      await enforceAccessOnRequest();
+    } catch (err) {
+      await dropBlockedAccess(mapAuthError(err));
+      return;
+    }
     const formData = new FormData(e.currentTarget);
     const newPatient = {
       name: formData.get('name') as string,
@@ -523,6 +689,12 @@ export default function App() {
   };
 
   const deletePatient = async (id: string) => {
+    try {
+      await enforceAccessOnRequest();
+    } catch (err) {
+      await dropBlockedAccess(mapAuthError(err));
+      return;
+    }
     await deleteDoc(doc(db, 'patients', id));
     setSelectedPatient(null);
     setPatientToDelete(null);
@@ -769,7 +941,7 @@ export default function App() {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 20 }}
             >
-              <AdminUsersPage />
+              <AdminUsersPage currentUserId={user.uid} />
             </motion.div>
           )}
 
@@ -1382,7 +1554,14 @@ function NewConsultationView({ patient, onBack, onComplete }: { patient: Patient
   };
 
   const handleDiagnose = async () => {
-    if (!symptoms) return;
+    if (!symptoms || !auth.currentUser) return;
+    try {
+      await assertActiveAccess(auth.currentUser.uid, auth.currentUser.email);
+    } catch (error) {
+      await logoutFromAuth();
+      alert(mapAuthError(error));
+      return;
+    }
     setLoading(true);
     try {
       const advice = await getVeterinaryAdvice(
@@ -1401,6 +1580,13 @@ function NewConsultationView({ patient, onBack, onComplete }: { patient: Patient
 
   const saveConsultation = async () => {
     if (!result || !auth.currentUser) return;
+    try {
+      await assertActiveAccess(auth.currentUser.uid, auth.currentUser.email);
+    } catch (error) {
+      await logoutFromAuth();
+      alert(mapAuthError(error));
+      return;
+    }
     const consultationData = {
       patientId: patient.id,
       date: Timestamp.now(),

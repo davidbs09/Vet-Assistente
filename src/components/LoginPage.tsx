@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { AlertCircle, CheckCircle2, Loader2, Lock, Stethoscope, ShieldCheck } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Eye, EyeOff, Loader2, Lock, Stethoscope, ShieldCheck } from 'lucide-react';
 import fundoLogin from '../source/fundo-login.png';
+import { validateLoginCredentials } from '../services/authService';
 
 export type LoginPageView = 'home' | 'login' | 'register';
 
@@ -23,6 +24,53 @@ export interface LoginPageProps {
 
 const DEFAULT_HERO_IMAGE = fundoLogin;
 
+function PasswordField({
+  id,
+  label,
+  value,
+  onChange,
+  autoComplete,
+  disabled,
+  required = true,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  autoComplete?: string;
+  disabled?: boolean;
+  required?: boolean;
+}) {
+  const [visible, setVisible] = useState(false);
+
+  return (
+    <div className="space-y-1.5">
+      <label className="text-xs font-medium text-slate-600" htmlFor={id}>{label}</label>
+      <div className="relative">
+        <input
+          id={id}
+          type={visible ? 'text' : 'password'}
+          autoComplete={autoComplete}
+          className="flex h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 pr-10 text-sm text-slate-900 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-50"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={disabled}
+          required={required}
+        />
+        <button
+          type="button"
+          onClick={() => setVisible((current) => !current)}
+          className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-slate-400 hover:text-slate-700 cursor-pointer"
+          aria-label={visible ? 'Esconder senha' : 'Exibir senha'}
+          tabIndex={0}
+        >
+          {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function LoginPage({
   onLogin,
   onRegister,
@@ -41,6 +89,12 @@ export default function LoginPage({
 
   const feedback = formError || error;
 
+  useEffect(() => {
+    if (error && view === 'home') {
+      setView('login');
+    }
+  }, [error, view]);
+
   const resetForm = () => {
     setPassword('');
     setConfirmPassword('');
@@ -55,8 +109,9 @@ export default function LoginPage({
   const handleLoginSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setFormError(null);
-    if (!email.trim() || !password) {
-      setFormError('Informe e-mail e senha para entrar.');
+    const validationError = validateLoginCredentials(email, password);
+    if (validationError) {
+      setFormError(validationError);
       return;
     }
     await onLogin(email.trim(), password);
@@ -69,6 +124,10 @@ export default function LoginPage({
       setFormError('Preencha nome, e-mail e senha para solicitar o acesso.');
       return;
     }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setFormError('Informe um e-mail válido.');
+      return;
+    }
     if (password.length < 6) {
       setFormError('A senha precisa ter pelo menos 6 caracteres.');
       return;
@@ -77,14 +136,18 @@ export default function LoginPage({
       setFormError('As senhas não coincidem.');
       return;
     }
-    await onRegister({
-      displayName: displayName.trim(),
-      email: email.trim(),
-      crmv: crmv.trim(),
-      password,
-    });
-    resetForm();
-    setView('login');
+    try {
+      await onRegister({
+        displayName: displayName.trim(),
+        email: email.trim(),
+        crmv: crmv.trim(),
+        password,
+      });
+      resetForm();
+      setView('login');
+    } catch (_) {
+      // App already maps the error; keep the register form visible.
+    }
   };
 
   const inputClass =
@@ -251,25 +314,26 @@ export default function LoginPage({
                     autoComplete="username"
                     className={inputClass}
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      if (formError) setFormError(null);
+                    }}
                     disabled={submitting}
                     placeholder="admin"
                     required
                   />
                 </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-slate-600" htmlFor="login-password">Senha</label>
-                  <input
-                    id="login-password"
-                    type="password"
-                    autoComplete="current-password"
-                    className={inputClass}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    disabled={submitting}
-                    required
-                  />
-                </div>
+                <PasswordField
+                  id="login-password"
+                  label="Senha"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(value) => {
+                    setPassword(value);
+                    if (formError) setFormError(null);
+                  }}
+                  disabled={submitting}
+                />
                 <button
                   type="submit"
                   disabled={submitting}
@@ -342,32 +406,22 @@ export default function LoginPage({
                   </div>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-slate-600" htmlFor="register-password">Senha</label>
-                    <input
-                      id="register-password"
-                      type="password"
-                      autoComplete="new-password"
-                      className={inputClass}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      disabled={submitting}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-slate-600" htmlFor="register-confirm">Confirmar senha</label>
-                    <input
-                      id="register-confirm"
-                      type="password"
-                      autoComplete="new-password"
-                      className={inputClass}
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      disabled={submitting}
-                      required
-                    />
-                  </div>
+                  <PasswordField
+                    id="register-password"
+                    label="Senha"
+                    autoComplete="new-password"
+                    value={password}
+                    onChange={setPassword}
+                    disabled={submitting}
+                  />
+                  <PasswordField
+                    id="register-confirm"
+                    label="Confirmar senha"
+                    autoComplete="new-password"
+                    value={confirmPassword}
+                    onChange={setConfirmPassword}
+                    disabled={submitting}
+                  />
                 </div>
                 <button
                   type="submit"

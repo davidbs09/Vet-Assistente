@@ -70,7 +70,7 @@
         "displayName": { "type": "string" },
         "crmv": { "type": "string" },
         "role": { "type": "string", "enum": ["admin", "user"] },
-        "status": { "type": "string", "enum": ["pending", "active"] },
+        "status": { "type": "string", "enum": ["pending", "active", "revoked"] },
         "createdAt": { "type": "string", "format": "date-time" },
         "activatedAt": { "type": "string", "format": "date-time" }
       },
