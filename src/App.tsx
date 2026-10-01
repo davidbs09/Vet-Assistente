@@ -1558,6 +1558,7 @@ function DeployGuideModal({
 function NewConsultationView({ patient, onBack, onComplete }: { patient: Patient, onBack: () => void, onComplete: (c: Consultation) => void }) {
   const [symptoms, setSymptoms] = useState('');
   const [loading, setLoading] = useState(false);
+  const [diagnoseError, setDiagnoseError] = useState('');
   const [result, setResult] = useState<DiagnosisResult | null>(null);
   const [exams, setExams] = useState<{ data: string; mimeType: string; name: string }[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1607,17 +1608,27 @@ function NewConsultationView({ patient, onBack, onComplete }: { patient: Patient
       const reader = new FileReader();
       reader.readAsDataURL(blob);
       reader.onloadend = async () => {
-        const base64Audio = (reader.result as string).split(',')[1];
-        const transcription = await transcribeAudio(base64Audio, blob.type);
-        if (transcription) {
-          setSymptoms(prev => prev ? `${prev}\n${transcription}` : transcription);
+        try {
+          const base64Audio = (reader.result as string).split(',')[1];
+          const transcription = await transcribeAudio(base64Audio, blob.type);
+          if (transcription) {
+            setSymptoms(prev => prev ? `${prev}\n${transcription}` : transcription);
+          }
+        } catch (error) {
+          console.error("Transcription error:", error);
+          alert(error instanceof Error ? error.message : "Erro ao transcrever áudio.");
+        } finally {
+          setIsTranscribing(false);
         }
+      };
+      reader.onerror = () => {
+        setIsTranscribing(false);
+        alert("Não foi possível ler o áudio gravado.");
       };
     } catch (error) {
       console.error("Transcription error:", error);
-      alert("Erro ao transcrever áudio.");
-    } finally {
       setIsTranscribing(false);
+      alert(error instanceof Error ? error.message : "Erro ao transcrever áudio.");
     }
   };
 
@@ -1651,6 +1662,7 @@ function NewConsultationView({ patient, onBack, onComplete }: { patient: Patient
       alert(mapAuthError(error));
       return;
     }
+    setDiagnoseError('');
     setLoading(true);
     try {
       const advice = await getVeterinaryAdvice(
@@ -1661,7 +1673,9 @@ function NewConsultationView({ patient, onBack, onComplete }: { patient: Patient
       setResult(advice);
     } catch (error) {
       console.error('AI error:', error);
-      alert(error instanceof Error ? error.message : 'Erro ao processar diagnóstico. Tente novamente.');
+      const message = error instanceof Error ? error.message : 'Erro não tratado ao processar o diagnóstico. Tente novamente.';
+      setDiagnoseError(message);
+      alert(message);
     } finally {
       setLoading(false);
     }
@@ -1769,6 +1783,12 @@ function NewConsultationView({ patient, onBack, onComplete }: { patient: Patient
                 )}
               </div>
 
+              {diagnoseError && (
+                <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                  {diagnoseError}
+                </div>
+              )}
+
               <Button 
                 className="w-full" 
                 size="lg" 
@@ -1778,7 +1798,7 @@ function NewConsultationView({ patient, onBack, onComplete }: { patient: Patient
                 {loading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Analisando livros e exames...
+                    Consultando o Claude (pode levar 1 a 2 min)...
                   </>
                 ) : (
                   <>
@@ -1838,7 +1858,7 @@ function NewConsultationView({ patient, onBack, onComplete }: { patient: Patient
                 <div>
                   <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Medicamentos e Doses (Baseado em {patient.weight}kg)</h4>
                   <div className="mt-2 space-y-3">
-                    {result.medications.map((med, i) => (
+                    {(result.medications ?? []).map((med, i) => (
                       <div key={i} className="rounded-xl border border-emerald-100 bg-white p-4 shadow-sm">
                         <div className="font-bold text-emerald-700">{med.name}</div>
                         <div className="mt-1 grid grid-cols-2 gap-2 text-xs text-slate-500">
@@ -1854,14 +1874,14 @@ function NewConsultationView({ patient, onBack, onComplete }: { patient: Patient
                 <div>
                   <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Exames Complementares Sugeridos</h4>
                   <ul className="mt-2 list-inside list-disc text-sm text-slate-700">
-                    {result.suggestedExams.map((exam, i) => <li key={i}>{exam}</li>)}
+                    {(result.suggestedExams ?? []).map((exam, i) => <li key={i}>{typeof exam === 'string' ? exam : String(exam)}</li>)}
                   </ul>
                 </div>
 
                 <div>
                   <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Fontes Bibliográficas e Bases de Dados</h4>
                   <ul className="mt-2 list-inside list-disc text-xs text-slate-500">
-                    {result.sources.map((source, i) => <li key={i}>{source}</li>)}
+                    {(result.sources ?? []).map((source, i) => <li key={i}>{typeof source === 'string' ? source : String(source)}</li>)}
                   </ul>
                 </div>
 

@@ -3,16 +3,14 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import {defineConfig, loadEnv} from 'vite';
 import {passwordResetPlugin} from './server/passwordResetPlugin';
+import {claudePlugin} from './server/claudePlugin';
 
 export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
-  const apiKey = env.GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
+  const serverEnv = {...process.env, ...env};
   return {
     base: './',
-    plugins: [react(), tailwindcss(), passwordResetPlugin({...process.env, ...env})],
-    define: {
-      'process.env.GEMINI_API_KEY': JSON.stringify(apiKey),
-    },
+    plugins: [react(), tailwindcss(), passwordResetPlugin(serverEnv), claudePlugin(serverEnv)],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

@@ -1,123 +1,4 @@
-import { GoogleGenAI, Type } from "@google/genai";
 import instructions from "./instructions.json";
-
-function getApiKey(): string {
-  if (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) {
-    return process.env.GEMINI_API_KEY;
-  }
-  const env = (import.meta as any).env || {};
-  return env.VITE_GEMINI_API_KEY || "";
-}
-
-const FALLBACK_MODEL = 'gemini-3.5-flash-lite';
-
-function uniqueModels(models: string[]): string[] {
-  return [...new Set(models.filter(Boolean))];
-}
-
-function isModelMissing(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
-  return message.includes('404') || message.includes('NOT_FOUND') || message.includes('no longer available');
-}
-
-function isOverloaded(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
-  return message.includes('503')
-    || message.includes('UNAVAILABLE')
-    || message.includes('high demand')
-    || message.includes('Please try again later');
-}
-
-function isQuotaExceeded(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
-  return message.includes('429')
-    || message.includes('RESOURCE_EXHAUSTED')
-    || message.includes('quota');
-}
-
-function mapGeminiError(error: unknown): Error {
-  const message = error instanceof Error ? error.message : String(error);
-  if (isQuotaExceeded(error)) {
-    return new Error(
-      'A cota da API Gemini esgotou neste modelo. Aguarde um minuto e tente de novo, ou ative faturamento no Google AI Studio.'
-    );
-  }
-  if (isOverloaded(error)) {
-    return new Error('O Gemini está com alta demanda agora. Espere uns 20 segundos e gere o relatório de novo.');
-  }
-  if (isModelMissing(error)) {
-    return new Error('O modelo Gemini configurado não está disponível nesta chave. Tente novamente em instantes.');
-  }
-  return error instanceof Error ? error : new Error(message);
-}
-
-const ai = new GoogleGenAI({ apiKey: getApiKey() });
-
-function wait(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function thinkingConfigFor(model: string): Record<string, unknown> {
-  const name = model.toLowerCase();
-  if (name.includes('flash-lite')) {
-    return {};
-  }
-  if (name.includes('gemini-3')) {
-    return { thinkingConfig: { thinkingLevel: 'HIGH' } };
-  }
-  if (name.includes('2.5')) {
-    return { thinkingConfig: { thinkingBudget: 8192 } };
-  }
-  return {};
-}
-
-function isInvalidRequest(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
-  return message.includes('400')
-    || message.includes('INVALID_ARGUMENT')
-    || message.includes('thinking');
-}
-
-async function generateContentWithFallback(
-  params: Record<string, unknown>,
-  models: string[],
-  options?: { enableThinking?: boolean }
-) {
-  let lastError: unknown;
-    modelLoop: for (const model of uniqueModels([...models, FALLBACK_MODEL])) {
-    const baseConfig = (params.config as Record<string, unknown> | undefined) || {};
-    const thinking = options?.enableThinking ? thinkingConfigFor(model) : {};
-    const configs = Object.keys(thinking).length > 0
-      ? [{ ...baseConfig, ...thinking }, baseConfig]
-      : [baseConfig];
-
-    for (const config of configs) {
-      for (let attempt = 1; attempt <= 3; attempt += 1) {
-        try {
-          return await ai.models.generateContent({
-            ...params,
-            model,
-            config,
-          } as unknown as Parameters<typeof ai.models.generateContent>[0]);
-        } catch (error) {
-          lastError = error;
-          if (isOverloaded(error) && attempt < 3) {
-            await wait(attempt * 2000);
-            continue;
-          }
-          if (isQuotaExceeded(error) || isModelMissing(error) || isOverloaded(error)) {
-            continue modelLoop;
-          }
-          if (isInvalidRequest(error)) {
-            break;
-          }
-          throw mapGeminiError(error);
-        }
-      }
-    }
-  }
-  throw mapGeminiError(lastError);
-}
 
 export interface DifferentialDiagnosis {
   disease: string;
@@ -139,8 +20,7 @@ export interface DiagnosisResult {
   sources: string[];
 }
 
-const { project_info, model_parameters, system_instruction, json_output_schema, prompts } = instructions;
-const schema = json_output_schema.properties;
+const { project_info, system_instruction, prompts } = instructions;
 
 function bullets(items: string[]): string {
   return items.map((item) => `- ${item}`).join('\n');
@@ -196,6 +76,9 @@ ${bullets(system_instruction.clinical_protocols.clinical_reasoning_rules)}
 SUPORTE E FLUIDOTERAPIA
 ${bullets(system_instruction.clinical_protocols.supportive_therapy_rules)}
 
+PLANO DE TRATAMENTO E CIRURGIA
+${bullets(system_instruction.clinical_protocols.treatment_style_and_surgery_rules)}
+
 PRESCRIÇÃO (SEM REDUNDÂNCIA, VIA E ANTIBIÓTICO)
 ${bullets(system_instruction.clinical_protocols.prescription_stewardship_rules)}
 
@@ -206,7 +89,30 @@ ${bullets(system_instruction.output_requirements)}
 Responda SEMPRE em JSON válido no schema pedido.`;
 }
 
-function parseModelJson(text: string): DiagnosisResult {
+function asText(value: unknown, fallback = ""): string {
+  if (typeof value === "string") return value;
+  if (value == null) return fallback;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) {
+    return value.map((item) => asText(item)).filter(Boolean).join(" — ");
+  }
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const preferred = asText(record.exam || record.source || record.title || record.name || record.topic || record.justification);
+    if (preferred) {
+      const extra = asText(record.justification || record.topic || record.reason);
+      return extra && extra !== preferred ? `${preferred}: ${extra}` : preferred;
+    }
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return fallback;
+    }
+  }
+  return fallback;
+}
+
+function parseModelJson(text: string): Record<string, unknown> {
   const trimmed = (text || "").trim();
   const unfenced = trimmed
     .replace(/^```(?:json)?\s*/i, "")
@@ -216,10 +122,94 @@ function parseModelJson(text: string): DiagnosisResult {
   const end = unfenced.lastIndexOf("}");
   const payload = start >= 0 && end > start ? unfenced.slice(start, end + 1) : unfenced;
   try {
-    return JSON.parse(payload || "{}") as DiagnosisResult;
+    return JSON.parse(payload || "{}") as Record<string, unknown>;
   } catch {
     throw new Error("A resposta do modelo não veio em JSON válido. Gere o diagnóstico novamente.");
   }
+}
+
+function normalizeMedication(item: unknown): DiagnosisResult["medications"][number] {
+  const record = item && typeof item === "object" ? item as Record<string, unknown> : {};
+  const dosage = asText(record.dosage || record.dose || record.presentation);
+  const frequency = asText(record.frequency || record.freq || record.interval);
+  const duration = asText(record.duration || record.instructions || record.indication);
+  return {
+    name: asText(record.name, "Medicamento"),
+    dosage: dosage || "Não informado",
+    frequency: frequency || asText(record.instructions, "Conforme orientação"),
+    duration: duration || "Conforme reavaliação",
+  };
+}
+
+function normalizeDifferential(item: unknown): DifferentialDiagnosis {
+  const record = item && typeof item === "object" ? item as Record<string, unknown> : {};
+  return {
+    disease: asText(record.disease || record.name, "Hipótese não nomeada"),
+    likelihood: asText(record.likelihood, "Plausível"),
+    reasoning: asText(record.reasoning || record.justification),
+  };
+}
+
+function normalizeResult(parsed: Record<string, unknown>): DiagnosisResult {
+  return {
+    diagnosis: asText(parsed.diagnosis),
+    differentials: Array.isArray(parsed.differentials) ? parsed.differentials.map(normalizeDifferential) : [],
+    treatment: asText(parsed.treatment),
+    medications: Array.isArray(parsed.medications) ? parsed.medications.map(normalizeMedication) : [],
+    suggestedExams: Array.isArray(parsed.suggestedExams) ? parsed.suggestedExams.map((item) => asText(item)).filter(Boolean) : [],
+    sources: Array.isArray(parsed.sources) ? parsed.sources.map((item) => asText(item)).filter(Boolean) : [],
+  };
+}
+
+const ADVICE_TIMEOUT_MS = 270_000;
+const TRANSCRIBE_TIMEOUT_MS = 25_000;
+
+function createTimeoutSignal(ms: number): AbortSignal {
+  if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
+    return AbortSignal.timeout(ms);
+  }
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), ms);
+  return controller.signal;
+}
+
+function mapClientError(error: unknown, timeoutMs: number): Error {
+  if (error instanceof DOMException && error.name === 'AbortError') {
+    return new Error(`O Claude demorou mais de ${Math.round(timeoutMs / 1000)}s e a consulta foi interrompida. Tente de novo.`);
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  if (message.includes('Failed to fetch') || message.includes('NetworkError') || message.includes('Network request failed')) {
+    return new Error('Não foi possível falar com o servidor do Claude. Confirme que o npm run dev está no ar e tente de novo.');
+  }
+  return error instanceof Error ? error : new Error(message || 'Falha ao consultar o Claude.');
+}
+
+async function postClaude<T>(path: string, body: Record<string, unknown>, timeoutMs: number): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(path, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body),
+      signal: createTimeoutSignal(timeoutMs),
+    });
+  } catch (error) {
+    throw mapClientError(error, timeoutMs);
+  }
+
+  const contentType = response.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    throw new Error('O servidor de diagnóstico não respondeu corretamente. Reinicie o npm run dev e tente de novo.');
+  }
+
+  const payload = await response.json().catch(() => ({})) as {error?: string; text?: string};
+  if (!response.ok) {
+    throw new Error(payload.error || `O Claude retornou erro ${response.status}. Tente novamente.`);
+  }
+  if (typeof (payload as {text?: unknown}).text !== 'string' && path.includes('advice')) {
+    throw new Error('A resposta do Claude veio vazia. Gere o diagnóstico novamente.');
+  }
+  return payload as T;
 }
 
 export async function getVeterinaryAdvice(
@@ -239,140 +229,37 @@ export async function getVeterinaryAdvice(
       : 'Nenhum exame complementar anexado.',
   });
 
-  const parts: any[] = [{ text: userPrompt }];
-
-  if (exams && exams.length > 0) {
-    exams.forEach(exam => {
-      parts.push({
-        inlineData: {
-          data: exam.data.split(',')[1] || exam.data,
-          mimeType: exam.mimeType
-        }
-      });
-    });
-  }
-
   try {
-    const response = await generateContentWithFallback({
-      contents: { parts },
-      config: {
-        systemInstruction,
-        temperature: model_parameters.temperature,
-        topP: model_parameters.top_p,
-        responseMimeType: model_parameters.response_mime_type,
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            diagnosis: {
-              type: Type.STRING,
-              description: schema.diagnosis.description
-            },
-            differentials: {
-              type: Type.ARRAY,
-              minItems: 3,
-              description: "No mínimo 3 doenças nomeadas, ordenadas pela probabilidade NESTE paciente (casuística brasileira + sinais presentes e ausentes), não por agrupamento de vetor.",
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  disease: {
-                    type: Type.STRING,
-                    description: "Nome da doença ou síndrome. Sem rótulos genéricos."
-                  },
-                  likelihood: {
-                    type: Type.STRING,
-                    description: "Mais provável, Plausível ou A descartar."
-                  },
-                  reasoning: {
-                    type: Type.STRING,
-                    description: "Por que esta POSIÇÃO na lista (2º vs 3º), 1 achado a favor, 1 contra e 1 exame/manobra que diferencia."
-                  }
-                },
-                required: ["disease", "likelihood", "reasoning"]
-              }
-            },
-            treatment: {
-              type: Type.STRING,
-              description: schema.treatment.description
-            },
-            medications: {
-              type: Type.ARRAY,
-              description: schema.medications.description,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  name: {
-                    type: Type.STRING,
-                    description: schema.medications.items.properties.name.description
-                  },
-                  dosage: {
-                    type: Type.STRING,
-                    description: schema.medications.items.properties.dosage.description
-                  },
-                  frequency: {
-                    type: Type.STRING,
-                    description: schema.medications.items.properties.frequency.description
-                  },
-                  duration: {
-                    type: Type.STRING,
-                    description: schema.medications.items.properties.duration.description
-                  }
-                },
-                required: [...schema.medications.items.required]
-              }
-            },
-            suggestedExams: {
-              type: Type.ARRAY,
-              description: schema.suggestedExams.description,
-              items: { type: Type.STRING }
-            },
-            sources: {
-              type: Type.ARRAY,
-              description: schema.sources.description,
-              items: { type: Type.STRING }
-            }
-          },
-          required: ["diagnosis", "differentials", "treatment", "medications", "suggestedExams", "sources"]
-        }
-      }
-    }, [...model_parameters.recommended_reasoning_models], { enableThinking: true });
+    const {text} = await postClaude<{text: string}>('/api/claude/advice', {
+      systemInstruction,
+      userPrompt,
+      exams: (exams || []).map((exam) => ({
+        data: exam.data,
+        mimeType: exam.mimeType,
+      })),
+    }, ADVICE_TIMEOUT_MS);
 
-    const parsed = parseModelJson(response.text || "");
-    const differentials = Array.isArray(parsed.differentials) ? parsed.differentials : [];
-    return {
-      diagnosis: parsed.diagnosis || "",
-      differentials,
-      treatment: parsed.treatment || "",
-      medications: Array.isArray(parsed.medications) ? parsed.medications : [],
-      suggestedExams: Array.isArray(parsed.suggestedExams) ? parsed.suggestedExams : [],
-      sources: Array.isArray(parsed.sources) ? parsed.sources : [],
-    };
+    if (!text?.trim()) {
+      throw new Error('A resposta do Claude veio vazia. Gere o diagnóstico novamente.');
+    }
+    const result = normalizeResult(parseModelJson(text));
+    if (!result.diagnosis && !result.treatment) {
+      throw new Error('O Claude não montou o diagnóstico. Tente gerar novamente.');
+    }
+    return result;
   } catch (error) {
-    throw mapGeminiError(error);
+    throw mapClientError(error, ADVICE_TIMEOUT_MS);
   }
 }
 
 export async function transcribeAudio(audioBase64: string, mimeType: string): Promise<string> {
   try {
-    const response = await generateContentWithFallback({
-      contents: [
-        {
-          parts: [
-            {
-              inlineData: {
-                data: audioBase64,
-                mimeType: mimeType
-              }
-            },
-            {
-              text: prompts.audio_anamnesis_transcription_prompt
-            }
-          ]
-        }
-      ]
-    }, [...model_parameters.recommended_multimodal_audio_models]);
-
-    return response.text || "";
+    const {text} = await postClaude<{text: string}>('/api/claude/transcribe', {
+      audioBase64,
+      mimeType,
+    }, TRANSCRIBE_TIMEOUT_MS);
+    return text || "";
   } catch (error) {
-    throw mapGeminiError(error);
+    throw mapClientError(error, TRANSCRIBE_TIMEOUT_MS);
   }
 }

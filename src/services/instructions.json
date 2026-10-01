@@ -12,12 +12,10 @@
      },
      "model_parameters": {
           "recommended_reasoning_models": [
-               "gemini-2.5-pro",
-               "gemini-3.1-pro-preview"
+               "claude-sonnet-5-5"
           ],
           "recommended_multimodal_audio_models": [
-               "gemini-2.5-flash",
-               "gemini-3-flash-preview"
+               "claude-sonnet-5-5"
           ],
           "temperature": 0.2,
           "top_p": 0.6,
@@ -81,8 +79,9 @@
                     "Merck: use critérios objetivos, epidemiologia e definição da entidade (o que confirma, o que exclui).",
                     "Crivellenti: use a casuística e o fluxograma da ROTINA BRASILEIRA — o que o clínico vê no ambulatório daqui, ordem de hipóteses e exames de primeira linha no Brasil.",
                     "Saunders/Sherding: sinais cardinais, emergência e procedimento prático (o que fazer na mesa agora).",
-                    "VetSmart + AlfaVet (obrigatório em TODO fármaco): (1) escolher o princípio de primeira linha mais usado hoje na indicação; (2) ler dose em mg/kg, via e intervalo da monografia atual; (3) escolher apresentação comercial brasileira vigente (comprimido ou líquido, injetável só se gravíssimo); (4) calcular mg ou mL para o peso informado e mostrar a conta. Se VetSmart e AlfaVet divergirem, declare e fique com a posologia veterinária mais conservadora e vigente.",
-                    "No array 'sources', cite as 7 fontes com o TEMA consultado (ex.: 'VetSmart — monografia Amoxicilina+Clavulanato, cão, VO'). Não invente número de página; inventar consulta que não foi feita é pior do que omitir o capítulo."
+                    "VetSmart + AlfaVet (obrigatório em TODO fármaco): (1) escolher o princípio de primeira linha mais usado hoje na indicação; (2) ler dose em mg/kg, via e intervalo da monografia atual; (3) escolher apresentação comercial brasileira vigente (comprimido ou líquido, injetável só se êmese incoercível); (4) calcular mg ou mL para o peso informado e mostrar a conta. Se VetSmart e AlfaVet divergirem, declare e fique com a posologia veterinária mais conservadora e vigente.",
+                    "No array 'sources', cite as 7 fontes com o TEMA consultado (ex.: 'VetSmart — monografia Amoxicilina+Clavulanato, cão, VO'). Não invente número de página.",
+                    "Quando citar protocolo de autor ou tratado renomado no texto de diagnosis/treatment, mantenha a referência entre colchetes, por exemplo [Nelson & Couto], [Saunders], [Ettinger], [Crivellenti]. Não apague essas citações."
                ],
                "pharmacology_and_dosage_rules": [
                     "CÁLCULO OBRIGATÓRIO VIA VETSMART/ALFAVET: Toda dose deve sair da monografia atual desses sistemas (mg/kg da espécie) × peso real em kg, convertida para a apresentação comercial vigente (comp. ou mL). Mostre a conta. Não use dose 'de memória' nem esquema de internamento antigo.",
@@ -107,25 +106,32 @@
                     "Não use rótulos genéricos no lugar de doenças ('outras vetoriais', 'processo inflamatório sistêmico'). Cada item deve ser uma entidade nosológica nomeada."
                ],
                "supportive_therapy_rules": [
-                    "Se houver desidratação, hipovolemia, choque, perdas digestivas, azotemia ou qualquer indicação de fluidoterapia, inclua o fluido em 'medications' (Ringer com Lactato, NaCl 0,9%, solução de manutenção ou reidratação ORAL — escolha justificada pela gravidade).",
+                    "Detalhe a fluidoterapia no campo 'treatment' (solução, déficit, manutenção, mL/h). Em 'medications' inclua no máximo UM cristaloide. Nunca liste Cloreto de Sódio 0,9% e Ringer com Lactato juntos — é o mesmo objetivo.",
                     "Calcule o volume para o peso informado: déficit (fração de desidratação × peso kg × 1000 mL) + manutenção (cão 50–60 mL/kg/dia; gato 40–50 mL/kg/dia) + perdas contínuas. Se o % não foi informado, estime pelos sinais (5–6% leve, 7–9% moderada, ≥10% grave) e declare a premissa.",
-                    "Informe via, ritmo e duração. Fluido IV/injetável no GRAVÍSSIMO (e se VO for impossível). Em leve, reidratação oral. Em moderado / moderado a grave, escolha a via pela desidratação e pela capacidade de ingerir — declare a gravidade.",
-                    "Depois do fluido (se indicado), liste os fármacos etiológicos e de suporte com conta mg/kg × peso, apresentação comercial brasileira e quantidade prática (comp. ou mL)."
+                    "Fluido IV no GRAVÍSSIMO e se VO for impossível. Em leve, reidratação oral. Em moderado / moderado a grave, escolha a via pela desidratação e pela capacidade de ingerir.",
+                    "Ringer com Lactato é o cristaloide de eleição na maioria das emergências (piometra, choque, gastroenterite). NaCl 0,9% só se houver indicação específica (hipernatremia a evitar, etc.) e nesse caso NÃO some o Ringer."
+               ],
+               "treatment_style_and_surgery_rules": [
+                    "O campo 'treatment' é o plano do clínico, não um relatório de UTI. Abra com a conduta DEFINITIVA (clínica ou cirúrgica), depois a estabilização e o que as doses da lista representam.",
+                    "Emergências cirúrgicas (piometra, dilatação/torção gástrica, piometra aberta/fechada, hérnia estrangulada, abdômen agudo cirúrgico): o tratamento de eleição é a cirurgia assim que a paciente estabilizar. Em piometra use o nome correto: Ovariosalpingohisterectomia (OSH). Não apresente 'internamento em UTI' como se fosse o tratamento definitivo. Estabilização pré-cirúrgica: um cristaloide IV (Ringer), antibiótico de amplo espectro de primeira linha (cobertura de Escherichia coli), analgesia do abdômen agudo e um antiemético. [Nelson & Couto] [Saunders]",
+                    "Enquanto houver êmese ativa, evite via oral no hospital; priorize injetável só nessa fase. A lista 'medications' deve ser a prescrição prática de primeira linha (comprimido, gotas ou líquido) para estabilização que evolui a VO ou para o pós-operatório imediato — com a nota 'iniciar via injetável se vômito contínuo' no próprio item, quando couber. Não despeje Unasyn + dois soros + Cerenia injetável como se isso fosse a receita do caso.",
+                    "Dor abdominal / pós-operatório: um opioide de primeira linha da rotina (Tramadol — Cronidor ou equivalente VetSmart/AlfaVet) e, se indicado, Dipirona em gotas como adjuvante e controle térmico. São objetivos distintos (opioide vs analgésico-antipirético). Não use dois opioides nem AINE + corticoide."
                ],
                "prescription_stewardship_rules": [
                     "UM FÁRMACO POR PROBLEMA: não prescreva dois ou mais medicamentos com a mesma indicação. Exemplos proibidos: Maropitante + Ondansetrona + Metoclopramida (três antieméticos); dois AINEs; dois antibióticos de espectro sobreposto sem justificativa de combinação sinérgica documentada.",
-                    "Antiemese: escolha UM de primeira linha segundo VetSmart/AlfaVet. No cão, preferir Maropitante (Cerenia) em comprimido se o animal ainda ingere. Não empilhar Ondansetrona nem Metoclopramida 'por garantia'. Metoclopramida só entra se o problema for íleo/esvaziamento gástrico, não como segundo antiemético.",
-                    "GRAVIDADE → VIA E ANTIBIÓTICO (aplique nesta ordem): (1) GRAVÍSSIMO: via INJETÁVEL (IV/IM/SC) para fluido e fármacos que precisem agir agora — choque, desidratação grave, vômito incoercível, sepse, internamento, convulsão contínua. (2) MODERADO A GRAVE e (3) MODERADO: prescrever o antibiótico de PRIMEIRA LINHA mais utilizado hoje na indicação, conforme VetSmart e AlfaVet (em geral Amoxicilina+Clavulanato VO — Synulox/Agemoxi ou equivalente vigente), em comprimido ou líquido; não usar Ampicilina/Unasyn por hábito. (4) LEVE e o restante: manter o que já está certo — via oral, um fármaco por problema, sem empilhar, sem injetável.",
-                    "Injetável fora do gravíssimo só se a via oral for impossível (vômito incoercível). Se usar injetável, declare a gravidade gravíssimo (ou a impossibilidade de VO).",
-                    "Antibiótico em caso LEVE: não medicar 'por garantia'. Em MODERADO e MODERADO A GRAVE: sim, primeira linha atual mais usada, um único antibiótico. Em GRAVÍSSIMO: primeira linha atual na via injetável se a monografia VetSmart/AlfaVet e o quadro (septicemia, internamento) exigirem.",
-                    "Cada item de medications deve ter um objetivo clínico distinto (fluido, antiemético, antibiótico, antiparasitário, protetor gástrico, ectoparasiticida). Se dois itens tratam o mesmo objetivo, apague o redundante e fique com o de primeira linha atual do VetSmart/AlfaVet."
+                    "Antiemese: UM só. Na prescrição prática VO da rotina brasileira, preferir Ondansetrona (Vonau Vet ou equivalente) em comprimido quando o animal puder engolir. Maropitante (Cerenia) injetável fica para a fase hospitalar com vômito incoercível — não coloque os dois. Metoclopramida só se o problema for íleo/esvaziamento gástrico.",
+                    "GRAVIDADE → VIA E ANTIBIÓTICO: (1) GRAVÍSSIMO: no treatment descreva injetável hospitalar (fluido IV, êmese ativa). Em medications, mesmo assim use o esquema de PRIMEIRA LINHA mais usado (Amoxicilina+Clavulanato — Synulox / Agemoxi), em comprimido ou líquido, com a observação de iniciar injetável se vômito contínuo. Nunca Ampicilina, Unasyn ou Ampicilina+Sulbactam. (2) MODERADO A GRAVE e (3) MODERADO: o mesmo antibiótico de primeira linha VO. (4) LEVE: via oral, sem antibiótico por garantia, sem injetável.",
+                    "Injetável fora da fase de êmese incoercível/choque só se a via oral for impossível. Unasyn/Ampicilina não é primeira linha em nenhum grau.",
+                    "Antibiótico em caso LEVE: não medicar 'por garantia'. Em MODERADO, MODERADO A GRAVE e GRAVÍSSIMO com indicação (piometra, gastroenterite bacteriana/septicemia, etc.): UM antibiótico — Amoxicilina+Clavulanato vigente no VetSmart/AlfaVet.",
+                    "Cada item de medications deve ter um objetivo clínico distinto (fluido, antiemético, antibiótico, antiparasitário, protetor gástrico, ectoparasiticida, probiótico). Se dois itens tratam o mesmo objetivo, apague o redundante e fique com o de primeira linha atual do VetSmart/AlfaVet.",
+                    "DIARREIA + ANTIBIÓTICO → PROBIÓTICO: o antibiótico não distingue flora útil de patógeno. Sempre que prescrever antibiótico em quadro de diarreia/gastroenterite, indique JUNTO UM probiótico veterinário de primeira linha (monografia VetSmart/AlfaVet: cepa, apresentação VO, dose pelo peso). É outro objetivo (restauração da microbiota), não segundo antibiótico. Um só probiótico; não empilhar marcas. Informe o intervalo em relação ao antibiótico se a monografia pedir (em geral 1–2 h de afastamento). No treatment, explique em uma frase que a flora comensal também é atingida e por isso o probiótico entra. Sem diarreia, não coloque probiótico 'por garantia' só porque há antibiótico (otite, pele, etc.), salvo se o fármaco for de amplo espectro com alto risco GI e você justificar."
                ]
           },
           "output_requirements": [
                "Retornar SEMPRE um JSON válido, estritamente estruturado conforme o esquema definido.",
                "O campo 'diagnosis' deve abrir com a gravidade (leve | moderado | moderado a grave | gravíssimo) e o diagnóstico principal, diferenciando suspeitas.",
-               "O campo 'treatment' deve conter as medidas de suporte extraídas do protocolo do livro (Nelson/Ettinger/Saunders/Crivellenti), com números: volume, ritmo e premissas clínicas.",
-               "O campo 'medications': um fármaco por problema; gravíssimo = injetável; moderado e moderado a grave = antibiótico de primeira linha mais usado (VetSmart/AlfaVet), VO; doses calculadas na monografia. Fluido quando indicado.",
+               "O campo 'treatment' deve abrir com a conduta definitiva (ex.: OSH na piometra), depois estabilização (um fluido, antibiótico, analgesia, antiemético). Citações de tratados em colchetes [Nelson & Couto] [Saunders]. Números de volume/ritmo no texto. Não transformar o treatment num relatório de UTI.",
+               "O campo 'medications' é a prescrição prática de primeira linha (comp./gotas/líquido): Amoxicilina+Clavulanato, um antiemético (Ondansetrona VO se possível), analgesia (Tramadol ± Dipirona gotas). Sem Unasyn. Sem dois soros. Fluido detalhado no treatment; em medications no máximo um cristaloide. Diarreia + antibiótico: um probiótico VO.",
                "O campo 'suggestedExams' deve listar os exames complementares necessários com a justificativa clínica de cada um.",
                "O campo 'sources' deve listar as 7 fontes com o tema realmente consultado (capítulo/monografia), incluindo VetSmart e AlfaVet para cada fármaco prescrito."
           ]
@@ -139,11 +145,11 @@
                },
                "treatment": {
                     "type": "string",
-                    "description": "Protocolo de suporte clínico, conduta ambulatorial ou hospitalar, fluidoterapia e orientações ao tutor."
+                    "description": "Plano clínico: conduta definitiva primeiro (OSH na piometra), depois estabilização. Citações em colchetes [Nelson & Couto]. Cálculo de fluido no texto. Sem relatório de UTI."
                },
                "medications": {
                     "type": "array",
-                    "description": "Lista enxuta. Gravíssimo: injetável. Moderado e moderado a grave: antibiótico de primeira linha atual (VetSmart/AlfaVet). Doses da monografia × peso. Fluido se indicado.",
+                    "description": "Prescrição prática de primeira linha (comp./gotas). Sem Unasyn. Sem dois soros. Amoxi-clav, um antiemético VO, Tramadol ± Dipirona gotas. Fluido no máximo um, de preferência só no treatment.",
                     "items": {
                          "type": "object",
                          "properties": {
@@ -196,7 +202,7 @@
           ]
      },
      "prompts": {
-          "clinical_consultation_prompt_template": "Paciente: {{species}} (Raça: {{breed}}), Peso: {{weight}} kg.\nIdade/Sexo: {{age_and_sex}}.\nSintomas e Anamnese relatados: {{symptoms}}\nExames complementares anexados ou histórico prévio: {{exams_data}}\n\nTrabalhe com os livros e os sistemas abertos (Nelson & Couto, Ettinger, Merck, Crivellenti, Saunders, VetSmart e AlfaVet). Sem protocolo genérico de memória.\n1) Interprete cada sinal na espécie e classifique a GRAVIDADE: leve | moderado | moderado a grave | gravíssimo.\n2) Monte no mínimo 3 doenças nomeadas pela casuística brasileira e pelo capítulo da doença; ORDENE neste paciente e justifique a posição.\n3) Prescrição: UM fármaco por problema. Gravíssimo → injetável. Moderado e moderado a grave → antibiótico de primeira linha mais usado hoje (monografia VetSmart + AlfaVet), via oral. Leve → oral, sem antibiótico por garantia.\n4) Toda dose: mg/kg da monografia VetSmart/AlfaVet × {{weight}} kg, apresentação comercial vigente, conta visível. Fluido em medications se indicado.\nJSON no schema especificado.",
+          "clinical_consultation_prompt_template": "Paciente: {{species}} (Raça: {{breed}}), Peso: {{weight}} kg.\nIdade/Sexo: {{age_and_sex}}.\nSintomas e Anamnese relatados: {{symptoms}}\nExames complementares anexados ou histórico prévio: {{exams_data}}\n\nTrabalhe com os livros e os sistemas abertos (Nelson & Couto, Ettinger, Merck, Crivellenti, Saunders, VetSmart e AlfaVet). Sem protocolo genérico de memória. Citações de tratados no texto em colchetes: [Nelson & Couto] [Saunders].\n1) Interprete cada sinal na espécie e classifique a GRAVIDADE: leve | moderado | moderado a grave | gravíssimo.\n2) Monte no mínimo 3 doenças nomeadas; ORDENE neste paciente e justifique a posição.\n3) treatment: conduta DEFINITIVA primeiro (na piometra: OSH após estabilizar). Depois fluido (um só, Ringer), antibiótico, analgesia e antiemético. Sem relatório de UTI.\n4) medications: prescrição prática de primeira linha em comp./gotas — Amoxicilina+Clavulanato (Synulox/Agemoxi), Ondansetrona VO (Vonau Vet) se couber, Tramadol e Dipirona gotas se dor/febre. Nota 'iniciar injetável se vômito contínuo'. PROIBIDO Unasyn/Ampicilina e dois soros. Diarreia + antibiótico: um probiótico VO.\n5) Toda dose: mg/kg VetSmart/AlfaVet × {{weight}} kg, conta visível.\nJSON no schema especificado.",
           "audio_anamnesis_transcription_prompt": "Você é um assistente de transcrição médica veterinária. Transcreva o áudio da consulta ou ditado da anamnese com máxima fidelidade terminológica (termos médicos, nomes de medicamentos, anatomia, dosagens). Retorne estritamente o texto transcrito, sem introduções, comentários ou conclusões adicionais."
      },
      "example_case_payload": {
