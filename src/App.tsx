@@ -116,6 +116,7 @@ interface Consultation {
   date: any;
   symptoms: string;
   diagnosis: string;
+  differentials?: DiagnosisResult['differentials'];
   treatment: string;
   medications: DiagnosisResult['medications'];
   suggestedExams: string[];
@@ -1680,6 +1681,7 @@ function NewConsultationView({ patient, onBack, onComplete }: { patient: Patient
       date: Timestamp.now(),
       symptoms,
       diagnosis: result.diagnosis,
+      differentials: result.differentials,
       treatment: result.treatment,
       medications: result.medications,
       suggestedExams: result.suggestedExams,
@@ -1803,9 +1805,28 @@ function NewConsultationView({ patient, onBack, onComplete }: { patient: Patient
               
               <div className="mt-6 space-y-6">
                 <div>
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Diagnóstico Provável</h4>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Diagnóstico Mais Provável</h4>
                   <p className="mt-1 text-lg font-bold text-slate-900">{result.diagnosis}</p>
                 </div>
+
+                {result.differentials && result.differentials.length > 0 && (
+                  <div>
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Diagnósticos Diferenciais</h4>
+                    <div className="mt-2 space-y-3">
+                      {result.differentials.map((diff, i) => (
+                        <div key={i} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                          <div className="flex flex-wrap items-baseline justify-between gap-2">
+                            <p className="font-bold text-slate-900">{i + 1}. {diff.disease}</p>
+                            <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">
+                              {diff.likelihood}
+                            </span>
+                          </div>
+                          <p className="mt-2 text-sm leading-relaxed text-slate-600">{diff.reasoning}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div>
                   <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Tratamento Recomendado</h4>
@@ -2025,6 +2046,11 @@ function ProntuarioView({ patient, consultations, onBack }: { patient: Patient, 
             <div class="consultation">
               <div class="cons-date">${new Date(c.date.seconds * 1000).toLocaleDateString('pt-BR')}</div>
               <div class="cons-diag">${c.diagnosis}</div>
+              ${c.differentials && c.differentials.length ? `
+              <div class="section-title">Diagnósticos diferenciais</div>
+              <ul>
+                ${c.differentials.map(d => `<li><strong>${d.disease}</strong>${d.likelihood ? ` (${d.likelihood})` : ''}: ${d.reasoning}</li>`).join('')}
+              </ul>` : ''}
               <div class="section-title">Sintomas</div>
               <p>${c.symptoms}</p>
               <div class="section-title">Tratamento</div>
@@ -2084,6 +2110,17 @@ function ProntuarioView({ patient, consultations, onBack }: { patient: Patient, 
               <div className="mt-4 space-y-6">
                 <div>
                   <h3 className="text-xl font-bold text-slate-900">{c.diagnosis}</h3>
+                  {c.differentials && c.differentials.length > 0 && (
+                    <div className="mt-4 space-y-2">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Diagnósticos diferenciais</h4>
+                      {c.differentials.map((diff, d) => (
+                        <p key={d} className="text-sm text-slate-600">
+                          <span className="font-semibold text-slate-800">{diff.disease}</span>
+                          {diff.likelihood ? ` (${diff.likelihood})` : ''}: {diff.reasoning}
+                        </p>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 
                 <div className="grid gap-8 md:grid-cols-2">

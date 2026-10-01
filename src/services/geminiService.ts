@@ -1,4 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
+import instructions from "./instructions.json";
 
 function getApiKey(): string {
   if (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) {
@@ -8,7 +9,11 @@ function getApiKey(): string {
   return env.VITE_GEMINI_API_KEY || "";
 }
 
-const GEMINI_MODELS = ['gemini-3.5-flash-lite'];
+const FALLBACK_MODEL = 'gemini-3.5-flash-lite';
+
+function uniqueModels(models: string[]): string[] {
+  return [...new Set(models.filter(Boolean))];
+}
 
 function isModelMissing(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
@@ -52,30 +57,77 @@ function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function generateContentWithFallback(params: Record<string, unknown>) {
+function thinkingConfigFor(model: string): Record<string, unknown> {
+  const name = model.toLowerCase();
+  if (name.includes('flash-lite')) {
+    return {};
+  }
+  if (name.includes('gemini-3')) {
+    return { thinkingConfig: { thinkingLevel: 'HIGH' } };
+  }
+  if (name.includes('2.5')) {
+    return { thinkingConfig: { thinkingBudget: 8192 } };
+  }
+  return {};
+}
+
+function isInvalidRequest(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes('400')
+    || message.includes('INVALID_ARGUMENT')
+    || message.includes('thinking');
+}
+
+async function generateContentWithFallback(
+  params: Record<string, unknown>,
+  models: string[],
+  options?: { enableThinking?: boolean }
+) {
   let lastError: unknown;
-  for (const model of GEMINI_MODELS) {
-    for (let attempt = 1; attempt <= 3; attempt += 1) {
-      try {
-        return await ai.models.generateContent({ ...params, model } as Parameters<typeof ai.models.generateContent>[0]);
-      } catch (error) {
-        lastError = error;
-        if (isOverloaded(error) && attempt < 3) {
-          await wait(attempt * 2000);
-          continue;
+    modelLoop: for (const model of uniqueModels([...models, FALLBACK_MODEL])) {
+    const baseConfig = (params.config as Record<string, unknown> | undefined) || {};
+    const thinking = options?.enableThinking ? thinkingConfigFor(model) : {};
+    const configs = Object.keys(thinking).length > 0
+      ? [{ ...baseConfig, ...thinking }, baseConfig]
+      : [baseConfig];
+
+    for (const config of configs) {
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
+        try {
+          return await ai.models.generateContent({
+            ...params,
+            model,
+            config,
+          } as unknown as Parameters<typeof ai.models.generateContent>[0]);
+        } catch (error) {
+          lastError = error;
+          if (isOverloaded(error) && attempt < 3) {
+            await wait(attempt * 2000);
+            continue;
+          }
+          if (isQuotaExceeded(error) || isModelMissing(error) || isOverloaded(error)) {
+            continue modelLoop;
+          }
+          if (isInvalidRequest(error)) {
+            break;
+          }
+          throw mapGeminiError(error);
         }
-        if (isQuotaExceeded(error) || isModelMissing(error) || isOverloaded(error)) {
-          break;
-        }
-        throw mapGeminiError(error);
       }
     }
   }
   throw mapGeminiError(lastError);
 }
 
+export interface DifferentialDiagnosis {
+  disease: string;
+  likelihood: string;
+  reasoning: string;
+}
+
 export interface DiagnosisResult {
   diagnosis: string;
+  differentials: DifferentialDiagnosis[];
   treatment: string;
   medications: {
     name: string;
@@ -87,38 +139,107 @@ export interface DiagnosisResult {
   sources: string[];
 }
 
+const { project_info, model_parameters, system_instruction, json_output_schema, prompts } = instructions;
+const schema = json_output_schema.properties;
+
+function bullets(items: string[]): string {
+  return items.map((item) => `- ${item}`).join('\n');
+}
+
+function speciesLabel(species: string): string {
+  if (species === 'dog') return 'Cão (canina)';
+  if (species === 'cat') return 'Gato (felina)';
+  return species;
+}
+
+function fillPromptTemplate(vars: Record<string, string>): string {
+  return prompts.clinical_consultation_prompt_template.replace(/\{\{(\w+)\}\}/g, (_, key: string) => vars[key] ?? 'Não informado');
+}
+
+function buildSystemInstruction(patientInfo: { species: string; breed: string; weight: number }): string {
+  const sources = system_instruction.mandatory_sources
+    .map((source, index) => {
+      const authors = 'authors' in source && source.authors ? ` — ${source.authors}` : '';
+      return `${index + 1}. ${source.title}${authors}\n   Função: ${source.purpose}`;
+    })
+    .join('\n');
+
+  return `${system_instruction.role}
+
+MISSÃO: ${system_instruction.core_mission}
+IDIOMA: ${project_info.language}. Espécies-alvo: ${project_info.target_species.join(', ')}.
+
+FONTES OBRIGATÓRIAS — consulte e aplique TODAS como se estivessem abertas na mesa. Diagnóstico sai do livro; fármaco e dose saem da monografia atual do VetSmart e do AlfaVet. É proibido protocolo genérico de memória.
+${sources}
+
+CONSULTA ÀS FONTES (como se estivesse lendo)
+${bullets(system_instruction.clinical_protocols.source_consultation_protocol)}
+O array "sources" DEVE incluir as 7 fontes com o tema consultado (pode acrescentar outras se realmente usadas). Não invente número de página.
+
+PACIENTE DESTA CONSULTA
+- Espécie: ${speciesLabel(patientInfo.species)}
+- Raça: ${patientInfo.breed}
+- Peso: ${patientInfo.weight} kg (toda dose: mg/kg da monografia atual VetSmart + AlfaVet × este peso; depois converta para comprimido ou mL da apresentação vigente no Brasil)
+
+PROTOCOLO DE ANAMNESE
+${bullets(system_instruction.clinical_protocols.anamnesis_analysis)}
+
+FARMACOLOGIA E POSOLOGIA
+${bullets(system_instruction.clinical_protocols.pharmacology_and_dosage_rules)}
+
+INTERPRETAÇÃO DE EXAMES
+${bullets(system_instruction.clinical_protocols.exam_interpretation_rules)}
+
+RACIOCÍNIO E ORDEM DOS DIFERENCIAIS
+${bullets(system_instruction.clinical_protocols.clinical_reasoning_rules)}
+
+SUPORTE E FLUIDOTERAPIA
+${bullets(system_instruction.clinical_protocols.supportive_therapy_rules)}
+
+PRESCRIÇÃO (SEM REDUNDÂNCIA, VIA E ANTIBIÓTICO)
+${bullets(system_instruction.clinical_protocols.prescription_stewardship_rules)}
+
+REQUISITOS DE SAÍDA
+${bullets(system_instruction.output_requirements)}
+- O campo "differentials" deve conter NO MÍNIMO 3 doenças distintas (não sinônimos da mesma entidade), da mais para a menos provável, com likelihood ("Mais provável" | "Plausível" | "A descartar") e raciocínio que justifique a POSIÇÃO de cada uma.
+
+Responda SEMPRE em JSON válido no schema pedido.`;
+}
+
+function parseModelJson(text: string): DiagnosisResult {
+  const trimmed = (text || "").trim();
+  const unfenced = trimmed
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+  const start = unfenced.indexOf("{");
+  const end = unfenced.lastIndexOf("}");
+  const payload = start >= 0 && end > start ? unfenced.slice(start, end + 1) : unfenced;
+  try {
+    return JSON.parse(payload || "{}") as DiagnosisResult;
+  } catch {
+    throw new Error("A resposta do modelo não veio em JSON válido. Gere o diagnóstico novamente.");
+  }
+}
+
 export async function getVeterinaryAdvice(
   patientInfo: { species: string; breed: string; weight: number },
   symptoms: string,
   exams?: { data: string; mimeType: string }[]
 ): Promise<DiagnosisResult> {
-  const systemInstruction = `Você é uma inteligência artificial veterinária de alta precisão, especializada em cães e gatos.
-Sua tarefa é fornecer diagnósticos e tratamentos baseados em evidências, pesquisando obrigatoriamente no mínimo nas seguintes fontes:
-1. Nelson & Couto - Medicina Interna de Pequenos Animais
-2. Ettinger - Tratado de Medicina Interna Veterinária
-3. Manual Merck Veterinário
-4. Casos de Rotina em Medicina Veterinária de Pequenos Animais - Leandro Z. Crivellenti
-5. Manual Saunders - Clínica de Pequenos Animais - Richard Sherding
-6. Vetsmart (para medicações, nomes comerciais e dosagens)
-7. Vetalfa (para medicações, nomes comerciais e dosagens)
+  const systemInstruction = buildSystemInstruction(patientInfo);
+  const userPrompt = fillPromptTemplate({
+    species: speciesLabel(patientInfo.species),
+    breed: patientInfo.breed,
+    weight: String(patientInfo.weight),
+    age_and_sex: 'Não informado neste registro',
+    symptoms,
+    exams_data: exams && exams.length > 0
+      ? `${exams.length} exame(s) anexado(s) nesta consulta (imagem ou PDF). Interprete os arquivos enviados e correlacione com a queixa.`
+      : 'Nenhum exame complementar anexado.',
+  });
 
-Para cada consulta, você deve:
-1. Analisar os sintomas e informações do paciente (espécie, raça, peso: ${patientInfo.weight}kg).
-2. Se houver exames (imagens ou PDFs convertidos em texto/imagem), analise-os cuidadosamente.
-3. Fornecer um diagnóstico provável.
-4. Sugerir um tratamento detalhado.
-5. Calcular as doses exatas dos medicamentos com base no peso do paciente (${patientInfo.weight}kg), seguindo estritamente as diretrizes do Vetsmart e Vetalfa.
-6. Apresentar as doses em comprimidos ou ml, dependendo do que for mais apropriado para o animal e o medicamento.
-7. Listar os medicamentos com nome, dose, frequência e duração.
-8. Sugerir exames complementares necessários para confirmar ou refinar o diagnóstico.
-9. Listar as fontes bibliográficas e sites consultados (incluindo obrigatoriamente as fontes citadas acima).
-
-Responda SEMPRE em formato JSON estruturado.`;
-
-  const parts: any[] = [
-    { text: `Paciente: ${patientInfo.species} (${patientInfo.breed}), Peso: ${patientInfo.weight}kg.
-Sintomas relatados: ${symptoms}` }
-  ];
+  const parts: any[] = [{ text: userPrompt }];
 
   if (exams && exams.length > 0) {
     exams.forEach(exam => {
@@ -136,40 +257,95 @@ Sintomas relatados: ${symptoms}` }
       contents: { parts },
       config: {
         systemInstruction,
-        responseMimeType: "application/json",
+        temperature: model_parameters.temperature,
+        topP: model_parameters.top_p,
+        responseMimeType: model_parameters.response_mime_type,
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            diagnosis: { type: Type.STRING },
-            treatment: { type: Type.STRING },
-            medications: {
+            diagnosis: {
+              type: Type.STRING,
+              description: schema.diagnosis.description
+            },
+            differentials: {
               type: Type.ARRAY,
+              minItems: 3,
+              description: "No mínimo 3 doenças nomeadas, ordenadas pela probabilidade NESTE paciente (casuística brasileira + sinais presentes e ausentes), não por agrupamento de vetor.",
               items: {
                 type: Type.OBJECT,
                 properties: {
-                  name: { type: Type.STRING },
-                  dosage: { type: Type.STRING },
-                  frequency: { type: Type.STRING },
-                  duration: { type: Type.STRING }
+                  disease: {
+                    type: Type.STRING,
+                    description: "Nome da doença ou síndrome. Sem rótulos genéricos."
+                  },
+                  likelihood: {
+                    type: Type.STRING,
+                    description: "Mais provável, Plausível ou A descartar."
+                  },
+                  reasoning: {
+                    type: Type.STRING,
+                    description: "Por que esta POSIÇÃO na lista (2º vs 3º), 1 achado a favor, 1 contra e 1 exame/manobra que diferencia."
+                  }
                 },
-                required: ["name", "dosage", "frequency", "duration"]
+                required: ["disease", "likelihood", "reasoning"]
+              }
+            },
+            treatment: {
+              type: Type.STRING,
+              description: schema.treatment.description
+            },
+            medications: {
+              type: Type.ARRAY,
+              description: schema.medications.description,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  name: {
+                    type: Type.STRING,
+                    description: schema.medications.items.properties.name.description
+                  },
+                  dosage: {
+                    type: Type.STRING,
+                    description: schema.medications.items.properties.dosage.description
+                  },
+                  frequency: {
+                    type: Type.STRING,
+                    description: schema.medications.items.properties.frequency.description
+                  },
+                  duration: {
+                    type: Type.STRING,
+                    description: schema.medications.items.properties.duration.description
+                  }
+                },
+                required: [...schema.medications.items.required]
               }
             },
             suggestedExams: {
               type: Type.ARRAY,
+              description: schema.suggestedExams.description,
               items: { type: Type.STRING }
             },
             sources: {
               type: Type.ARRAY,
+              description: schema.sources.description,
               items: { type: Type.STRING }
             }
           },
-          required: ["diagnosis", "treatment", "medications", "suggestedExams", "sources"]
+          required: ["diagnosis", "differentials", "treatment", "medications", "suggestedExams", "sources"]
         }
       }
-    });
+    }, [...model_parameters.recommended_reasoning_models], { enableThinking: true });
 
-    return JSON.parse(response.text || "{}");
+    const parsed = parseModelJson(response.text || "");
+    const differentials = Array.isArray(parsed.differentials) ? parsed.differentials : [];
+    return {
+      diagnosis: parsed.diagnosis || "",
+      differentials,
+      treatment: parsed.treatment || "",
+      medications: Array.isArray(parsed.medications) ? parsed.medications : [],
+      suggestedExams: Array.isArray(parsed.suggestedExams) ? parsed.suggestedExams : [],
+      sources: Array.isArray(parsed.sources) ? parsed.sources : [],
+    };
   } catch (error) {
     throw mapGeminiError(error);
   }
@@ -188,12 +364,12 @@ export async function transcribeAudio(audioBase64: string, mimeType: string): Pr
               }
             },
             {
-              text: "Transcreva este áudio veterinário com precisão. Retorne apenas o texto da transcrição, sem comentários adicionais."
+              text: prompts.audio_anamnesis_transcription_prompt
             }
           ]
         }
       ]
-    });
+    }, [...model_parameters.recommended_multimodal_audio_models]);
 
     return response.text || "";
   } catch (error) {
