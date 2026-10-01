@@ -6,7 +6,7 @@ import {getAuth} from 'firebase-admin/auth';
 import {FieldValue, getFirestore} from 'firebase-admin/firestore';
 import type {Plugin, ViteDevServer} from 'vite';
 
-type EnvMap = Record<string, string>;
+type EnvMap = Record<string, string | undefined>;
 
 const RESET_COLLECTION = 'passwordResets';
 const USERS_COLLECTION = 'users';

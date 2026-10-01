@@ -8,21 +8,7 @@ function getApiKey(): string {
   return env.VITE_GEMINI_API_KEY || "";
 }
 
-const DEFAULT_GEMINI_MODELS = ['gemini-3-flash-preview', 'gemini-3.8-flash'];
-
-function getGeminiModel(fallback: string): string {
-  const env = (import.meta as any).env || {};
-  return String(
-    env.VITE_GEMINI_MODEL
-    || (typeof process !== 'undefined' && process.env?.GEMINI_MODEL)
-    || fallback
-  );
-}
-
-function getGeminiModels(): string[] {
-  const preferred = getGeminiModel(DEFAULT_GEMINI_MODELS[0]);
-  return [...new Set([preferred, ...DEFAULT_GEMINI_MODELS])];
-}
+const GEMINI_MODELS = ['gemini-3.5-flash-lite'];
 
 function isModelMissing(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
@@ -37,9 +23,16 @@ function isOverloaded(error: unknown): boolean {
     || message.includes('Please try again later');
 }
 
+function isQuotaExceeded(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes('429')
+    || message.includes('RESOURCE_EXHAUSTED')
+    || message.includes('quota');
+}
+
 function mapGeminiError(error: unknown): Error {
   const message = error instanceof Error ? error.message : String(error);
-  if (message.includes('429') || message.includes('RESOURCE_EXHAUSTED') || message.includes('quota')) {
+  if (isQuotaExceeded(error)) {
     return new Error(
       'A cota da API Gemini esgotou neste modelo. Aguarde um minuto e tente de novo, ou ative faturamento no Google AI Studio.'
     );
@@ -61,7 +54,7 @@ function wait(ms: number): Promise<void> {
 
 async function generateContentWithFallback(params: Record<string, unknown>) {
   let lastError: unknown;
-  for (const model of getGeminiModels()) {
+  for (const model of GEMINI_MODELS) {
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       try {
         return await ai.models.generateContent({ ...params, model } as Parameters<typeof ai.models.generateContent>[0]);
@@ -71,7 +64,7 @@ async function generateContentWithFallback(params: Record<string, unknown>) {
           await wait(attempt * 2000);
           continue;
         }
-        if (isModelMissing(error) || isOverloaded(error)) {
+        if (isQuotaExceeded(error) || isModelMissing(error) || isOverloaded(error)) {
           break;
         }
         throw mapGeminiError(error);
