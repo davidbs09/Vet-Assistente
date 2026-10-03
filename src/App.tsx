@@ -8,7 +8,7 @@ import { getDocFromServer } from 'firebase/firestore';
 import { getVeterinaryAdvice, DiagnosisResult, transcribeAudio } from './services/geminiService';
 import { 
   Plus, Search, LogOut, User as UserIcon, Dog, Cat, FileText, 
-  Printer, History, Upload, ChevronRight, Save, Trash2, X, 
+  Printer, History, Upload, ChevronRight, Save, Trash2, Pencil, X, 
   AlertCircle, CheckCircle2, Loader2, FilePlus, ClipboardList,
   Mic, Square, ShieldAlert, Lock, RefreshCw,
   Globe, Copy, Check, ExternalLink, Code2, Server, HelpCircle, ShieldCheck
@@ -266,6 +266,8 @@ export default function App() {
   const [view, setView] = useState<'dashboard' | 'patient' | 'new-consultation' | 'prescription' | 'prontuario' | 'admin'>('dashboard');
   const [currentConsultation, setCurrentConsultation] = useState<Consultation | null>(null);
   const [isAddingPatient, setIsAddingPatient] = useState(false);
+  const [isEditingPatient, setIsEditingPatient] = useState(false);
+  const [savingPatient, setSavingPatient] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [patientToDelete, setPatientToDelete] = useState<Patient | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
@@ -602,6 +604,22 @@ export default function App() {
       // Sort by createdAt descending
       docs.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
       setPatients(docs);
+      setSelectedPatient((current) => {
+        if (!current) return current;
+        const updated = docs.find((patient) => patient.id === current.id);
+        if (!updated) return current;
+        if (
+          updated.name === current.name
+          && updated.species === current.species
+          && updated.breed === current.breed
+          && updated.weight === current.weight
+          && updated.ownerName === current.ownerName
+          && updated.ownerPhone === current.ownerPhone
+        ) {
+          return current;
+        }
+        return updated;
+      });
     }, async (error) => {
       handleFirestoreError(error, OperationType.LIST, 'patients');
       if (isPermissionDenied(error)) {
@@ -737,6 +755,7 @@ export default function App() {
     setPasswordResetEmail(null);
     setView('dashboard');
     setSelectedPatient(null);
+    setIsEditingPatient(false);
   };
 
   const addPatient = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -783,7 +802,54 @@ export default function App() {
     await deleteDoc(doc(db, 'patients', id));
     setSelectedPatient(null);
     setPatientToDelete(null);
+    setIsEditingPatient(false);
     setView('dashboard');
+  };
+
+  const readPatientForm = (form: HTMLFormElement): Pick<Patient, 'name' | 'species' | 'breed' | 'weight' | 'ownerName' | 'ownerPhone'> => {
+    const formData = new FormData(form);
+    const weight = parseFloat(String(formData.get('weight') || ''));
+    const species: Patient['species'] = formData.get('species') === 'cat' ? 'cat' : 'dog';
+    return {
+      name: String(formData.get('name') || '').trim(),
+      species,
+      breed: String(formData.get('breed') || '').trim(),
+      weight,
+      ownerName: String(formData.get('ownerName') || '').trim(),
+      ownerPhone: String(formData.get('ownerPhone') || '').trim(),
+    };
+  };
+
+  const updatePatient = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!user || !selectedPatient) return;
+    const form = e.currentTarget;
+    try {
+      await enforceAccessOnRequest();
+    } catch (err) {
+      await dropBlockedAccess(mapAuthError(err));
+      return;
+    }
+    const fields = readPatientForm(form);
+    if (!fields.name || !fields.breed || !fields.ownerName || !fields.ownerPhone || Number.isNaN(fields.weight) || fields.weight <= 0) {
+      alert('Preencha nome, raça, peso, proprietário e telefone para salvar a ficha.');
+      return;
+    }
+    setSavingPatient(true);
+    try {
+      await updateDoc(doc(db, 'patients', selectedPatient.id), fields);
+      setSelectedPatient({ ...selectedPatient, ...fields });
+      setIsEditingPatient(false);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, 'patients');
+      if (isPermissionDenied(err)) {
+        alert('O Firestore bloqueou a edição do paciente. Publique o arquivo firestore.rules completo no Console (Firestore > Regras).');
+        return;
+      }
+      alert(err instanceof Error ? err.message : 'Não foi possível atualizar o paciente.');
+    } finally {
+      setSavingPatient(false);
+    }
   };
 
   const filteredPatients = patients.filter(p => 
@@ -1122,9 +1188,26 @@ export default function App() {
                   <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                     <div className="flex items-center justify-between">
                       <h3 className="font-bold text-slate-900">Informações</h3>
-                      <Button variant="ghost" size="sm" onClick={() => setPatientToDelete(selectedPatient)}>
-                        <Trash2 className="h-4 w-4 text-rose-500" />
-                      </Button>
+                      <div className="flex items-center">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          title="Editar paciente"
+                          aria-label="Editar paciente"
+                          onClick={() => setIsEditingPatient(true)}
+                        >
+                          <Pencil className="h-4 w-4 text-slate-500" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          title="Excluir paciente"
+                          aria-label="Excluir paciente"
+                          onClick={() => setPatientToDelete(selectedPatient)}
+                        >
+                          <Trash2 className="h-4 w-4 text-rose-500" />
+                        </Button>
+                      </div>
                     </div>
                     <div className="mt-6 space-y-4">
                       <div className="flex justify-between text-sm">
@@ -1288,6 +1371,81 @@ export default function App() {
                 </div>
                 <Button type="submit" className="w-full mt-4">
                   Salvar Paciente
+                </Button>
+              </form>
+            </motion.div>
+          </div>
+        )}
+        {isEditingPatient && selectedPatient && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+              onClick={() => !savingPatient && setIsEditingPatient(false)}
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="relative w-full max-w-md rounded-2xl bg-white p-8 shadow-2xl"
+            >
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-bold text-slate-900">Editar Paciente</h2>
+                <Button variant="ghost" size="sm" disabled={savingPatient} onClick={() => setIsEditingPatient(false)}>
+                  <X className="h-5 w-5" />
+                </Button>
+              </div>
+              <form key={selectedPatient.id} onSubmit={updatePatient} className="mt-6 space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">Nome do Paciente</label>
+                  <Input name="name" required defaultValue={selectedPatient.name} placeholder="Ex: Rex" />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-700">Espécie</label>
+                    <select
+                      name="species"
+                      defaultValue={selectedPatient.species}
+                      className="flex h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    >
+                      <option value="dog">Cão</option>
+                      <option value="cat">Gato</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-700">Peso (kg)</label>
+                    <Input name="weight" type="number" step="0.1" min="0.1" required defaultValue={selectedPatient.weight} placeholder="Ex: 10.5" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">Raça</label>
+                  <Input name="breed" required defaultValue={selectedPatient.breed} placeholder="Ex: Golden Retriever" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">Proprietário</label>
+                  <Input name="ownerName" required defaultValue={selectedPatient.ownerName} placeholder="Nome do dono" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">Telefone</label>
+                  <Input name="ownerPhone" required defaultValue={selectedPatient.ownerPhone} placeholder="(00) 00000-0000" />
+                </div>
+                <p className="text-xs text-slate-500">
+                  As consultas e o prontuário deste animal permanecem vinculados a esta ficha.
+                </p>
+                <Button type="submit" className="w-full mt-4" disabled={savingPatient}>
+                  {savingPatient ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Salvando...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="mr-2 h-4 w-4" />
+                      Salvar Alterações
+                    </>
+                  )}
                 </Button>
               </form>
             </motion.div>
@@ -1798,7 +1956,7 @@ function NewConsultationView({ patient, onBack, onComplete }: { patient: Patient
                 {loading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Consultando o Claude (pode levar 1 a 2 min)...
+                    Gerando relatório (pode levar até 1 minuto)...
                   </>
                 ) : (
                   <>

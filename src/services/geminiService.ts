@@ -22,8 +22,8 @@ export interface DiagnosisResult {
 
 const { project_info, system_instruction, prompts } = instructions;
 
-function bullets(items: string[]): string {
-  return items.map((item) => `- ${item}`).join('\n');
+function bullets(items?: string[]): string {
+  return (items ?? []).map((item) => `- ${item}`).join('\n');
 }
 
 function speciesLabel(species: string): string {
@@ -34,6 +34,50 @@ function speciesLabel(species: string): string {
 
 function fillPromptTemplate(vars: Record<string, string>): string {
   return prompts.clinical_consultation_prompt_template.replace(/\{\{(\w+)\}\}/g, (_, key: string) => vars[key] ?? 'Não informado');
+}
+
+function fillTestPrompt(vars: Record<string, string>): string {
+  return `Paciente: ${vars.species} (Raça: ${vars.breed}), Peso: ${vars.weight} kg.
+Idade/Sexo: ${vars.age_and_sex}.
+Sintomas e anamnese: ${vars.symptoms}
+Exames: ${vars.exams_data}
+
+Responda APENAS um JSON válido, sem markdown e sem texto fora do JSON, com estas chaves em string/array plano:
+- diagnosis: string
+- differentials: [{disease, likelihood, reasoning}]
+- treatment: string (markdown)
+- medications: [{name, dosage, frequency, duration}]
+- suggestedExams: [string]
+- sources: [string]
+
+Não aninhe diagnosis nem treatment como objeto. Inclua as 7 fontes obrigatórias.`;
+}
+
+const USE_TEST_SYSTEM_INSTRUCTION = true;
+
+function buildTestSystemInstruction(patientInfo: { species: string; breed: string; weight: number }): string {
+  return `Você é uma inteligência artificial veterinária de alta precisão, especializada em cães e gatos.
+Sua tarefa é fornecer diagnósticos e tratamentos baseados em evidências, pesquisando obrigatoriamente no mínimo nas seguintes fontes:
+1. Nelson & Couto - Medicina Interna de Pequenos Animais
+2. Ettinger - Tratado de Medicina Interna Veterinária
+3. Manual Merck Veterinário
+4. Casos de Rotina em Medicina Veterinária de Pequenos Animais - Leandro Z. Crivellenti
+5. Manual Saunders - Clínica de Pequenos Animais - Richard Sherding
+6. Vetsmart (para medicações, nomes comerciais e dosagens)
+7. Vetalfa (para medicações, nomes comerciais e dosagens)
+
+Para cada consulta, você deve:
+1. Analisar os sintomas e informações do paciente (espécie, raça, peso: ${patientInfo.weight}kg).
+2. Se houver exames (imagens ou PDFs convertidos em texto/imagem), analise-os cuidadosamente.
+3. Fornecer um diagnóstico provável.
+4. Sugerir um tratamento detalhado.
+5. Calcular as doses exatas dos medicamentos com base no peso do paciente (${patientInfo.weight}kg), seguindo estritamente as diretrizes do Vetsmart e Vetalfa.
+6. Apresentar as doses em comprimidos ou ml, dependendo do que for mais apropriado para o animal e o medicamento.
+7. Listar os medicamentos com nome, dose, frequência e duração.
+8. Sugerir exames complementares necessários para confirmar ou refinar o diagnóstico.
+9. Listar as fontes bibliográficas e sites consultados (incluindo obrigatoriamente as fontes citadas acima).
+
+Responda SEMPRE em formato JSON estruturado com as chaves: diagnosis, differentials, treatment, medications, suggestedExams, sources.`;
 }
 
 function buildSystemInstruction(patientInfo: { species: string; breed: string; weight: number }): string {
@@ -94,13 +138,25 @@ function asText(value: unknown, fallback = ""): string {
   if (value == null) return fallback;
   if (typeof value === "number" || typeof value === "boolean") return String(value);
   if (Array.isArray(value)) {
-    return value.map((item) => asText(item)).filter(Boolean).join(" — ");
+    return value.map((item) => asText(item)).filter(Boolean).join("\n");
   }
   if (typeof value === "object") {
     const record = value as Record<string, unknown>;
-    const preferred = asText(record.exam || record.source || record.title || record.name || record.topic || record.justification);
+    const preferred = asText(
+      record.provavel
+      || record.doenca
+      || record.medicamento
+      || record.dose_final
+      || record.exam
+      || record.source
+      || record.title
+      || record.name
+      || record.disease
+      || record.topic
+      || record.justification
+    );
     if (preferred) {
-      const extra = asText(record.justification || record.topic || record.reason);
+      const extra = asText(record.justification || record.topic || record.reason || record.gravidade_geral);
       return extra && extra !== preferred ? `${preferred}: ${extra}` : preferred;
     }
     try {
@@ -112,31 +168,158 @@ function asText(value: unknown, fallback = ""): string {
   return fallback;
 }
 
-function parseModelJson(text: string): Record<string, unknown> {
-  const trimmed = (text || "").trim();
-  const unfenced = trimmed
+function pickText(record: Record<string, unknown>, keys: string[], fallback = ""): string {
+  for (const key of keys) {
+    const value = asText(record[key]);
+    if (value) return value;
+  }
+  return fallback;
+}
+
+function extractFrequency(text: string): string {
+  const match = text.match(/a cada\s+[\d.,–\-]+\s*(?:h|horas?|dias?)(?:\s*\([^)]+\))?/i);
+  return match?.[0] ?? "";
+}
+
+function likelihoodFromPosition(position: unknown): string {
+  const n = Number(position);
+  if (n === 1) return "Mais provável";
+  if (n === 2 || n === 3) return "Plausível";
+  if (n >= 4) return "A descartar";
+  return "";
+}
+
+function flattenDiagnosis(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return asText(value);
+  const record = value as Record<string, unknown>;
+  const main = pickText(record, ["provavel", "principal", "diagnostico", "summary", "diagnosis"]);
+  const severity = pickText(record, ["gravidade_geral", "gravidade"]);
+  if (main && severity) return `${main} (${severity})`;
+  return main || asText(value);
+}
+
+function flattenTreatment(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) return value.map((item) => `- ${asText(item)}`).filter((item) => item !== "- ").join("\n");
+  if (!value || typeof value !== "object") return asText(value);
+
+  const lines: string[] = [];
+  for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+    const title = key.replace(/^\d+_/, "").replace(/_/g, " ");
+    lines.push(`**${title}**`);
+    if (Array.isArray(nested)) {
+      for (const item of nested) lines.push(`- ${asText(item)}`);
+    } else if (nested && typeof nested === "object") {
+      for (const [childKey, childValue] of Object.entries(nested as Record<string, unknown>)) {
+        if (Array.isArray(childValue)) {
+          lines.push(`- **${childKey.replace(/_/g, " ")}**`);
+          for (const item of childValue) lines.push(`  - ${asText(item)}`);
+        } else {
+          lines.push(`- **${childKey.replace(/_/g, " ")}:** ${asText(childValue)}`);
+        }
+      }
+    } else {
+      const text = asText(nested);
+      if (text) lines.push(text);
+    }
+    lines.push("");
+  }
+  return lines.join("\n").trim();
+}
+
+function extractJsonPayload(text: string): string {
+  const unfenced = (text || "")
+    .trim()
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/\s*```$/i, "")
     .trim();
   const start = unfenced.indexOf("{");
-  const end = unfenced.lastIndexOf("}");
-  const payload = start >= 0 && end > start ? unfenced.slice(start, end + 1) : unfenced;
-  try {
-    return JSON.parse(payload || "{}") as Record<string, unknown>;
-  } catch {
-    throw new Error("A resposta do modelo não veio em JSON válido. Gere o diagnóstico novamente.");
+  return start >= 0 ? unfenced.slice(start) : unfenced;
+}
+
+function repairTruncatedJson(raw: string): string {
+  let inString = false;
+  let escaped = false;
+  const stack: string[] = [];
+
+  for (const ch of raw) {
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (ch === "\\") {
+        escaped = true;
+        continue;
+      }
+      if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+    if (ch === "{") stack.push("}");
+    else if (ch === "[") stack.push("]");
+    else if ((ch === "}" || ch === "]") && stack.length) stack.pop();
   }
+
+  let repaired = raw.trimEnd();
+  if (escaped) repaired += "\\";
+  if (inString) repaired += '"';
+  repaired = repaired.replace(/,\s*$/, "");
+  while (stack.length) repaired += stack.pop();
+  return repaired;
+}
+
+function tryParseObject(candidate: string): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(candidate || "{}") as unknown;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function parseModelJson(text: string): Record<string, unknown> {
+  const payload = extractJsonPayload(text);
+  const candidates = [
+    payload,
+    repairTruncatedJson(payload),
+  ];
+  const lastComma = payload.lastIndexOf(",");
+  if (lastComma > 0) candidates.push(repairTruncatedJson(payload.slice(0, lastComma)));
+  const lastQuote = payload.lastIndexOf('"');
+  if (lastQuote > 0) candidates.push(repairTruncatedJson(payload.slice(0, lastQuote + 1)));
+
+  for (const candidate of candidates) {
+    const parsed = tryParseObject(candidate);
+    if (parsed) return parsed;
+  }
+
+  const walkStart = Math.max(20, payload.length - 500);
+  for (let i = payload.length - 1; i >= walkStart; i--) {
+    const parsed = tryParseObject(repairTruncatedJson(payload.slice(0, i)));
+    if (parsed) return parsed;
+  }
+
+  throw new Error("A resposta do modelo não veio em JSON válido. Gere o diagnóstico novamente.");
 }
 
 function normalizeMedication(item: unknown): DiagnosisResult["medications"][number] {
   const record = item && typeof item === "object" ? item as Record<string, unknown> : {};
-  const dosage = asText(record.dosage || record.dose || record.presentation);
-  const frequency = asText(record.frequency || record.freq || record.interval);
-  const duration = asText(record.duration || record.instructions || record.indication);
+  const dosage = pickText(record, ["dosage", "dose_final", "dose", "presentation"]);
+  const frequency = pickText(record, ["frequency", "freq", "interval"])
+    || extractFrequency(pickText(record, ["dose_final", "dose_referencia", "observacoes", "instructions"]));
+  const duration = pickText(record, ["duration", "duracao", "instructions", "indication"]);
   return {
-    name: asText(record.name, "Medicamento"),
+    name: pickText(record, ["name", "medicamento"], "Medicamento"),
     dosage: dosage || "Não informado",
-    frequency: frequency || asText(record.instructions, "Conforme orientação"),
+    frequency: frequency || "Conforme orientação",
     duration: duration || "Conforme reavaliação",
   };
 }
@@ -144,17 +327,17 @@ function normalizeMedication(item: unknown): DiagnosisResult["medications"][numb
 function normalizeDifferential(item: unknown): DifferentialDiagnosis {
   const record = item && typeof item === "object" ? item as Record<string, unknown> : {};
   return {
-    disease: asText(record.disease || record.name, "Hipótese não nomeada"),
-    likelihood: asText(record.likelihood, "Plausível"),
-    reasoning: asText(record.reasoning || record.justification),
+    disease: pickText(record, ["disease", "doenca", "name"], "Hipótese não nomeada"),
+    likelihood: pickText(record, ["likelihood"]) || likelihoodFromPosition(record.posicao) || "Plausível",
+    reasoning: pickText(record, ["reasoning", "justificativa"]),
   };
 }
 
 function normalizeResult(parsed: Record<string, unknown>): DiagnosisResult {
   return {
-    diagnosis: asText(parsed.diagnosis),
+    diagnosis: flattenDiagnosis(parsed.diagnosis),
     differentials: Array.isArray(parsed.differentials) ? parsed.differentials.map(normalizeDifferential) : [],
-    treatment: asText(parsed.treatment),
+    treatment: flattenTreatment(parsed.treatment),
     medications: Array.isArray(parsed.medications) ? parsed.medications.map(normalizeMedication) : [],
     suggestedExams: Array.isArray(parsed.suggestedExams) ? parsed.suggestedExams.map((item) => asText(item)).filter(Boolean) : [],
     sources: Array.isArray(parsed.sources) ? parsed.sources.map((item) => asText(item)).filter(Boolean) : [],
@@ -217,8 +400,10 @@ export async function getVeterinaryAdvice(
   symptoms: string,
   exams?: { data: string; mimeType: string }[]
 ): Promise<DiagnosisResult> {
-  const systemInstruction = buildSystemInstruction(patientInfo);
-  const userPrompt = fillPromptTemplate({
+  const systemInstruction = USE_TEST_SYSTEM_INSTRUCTION
+    ? buildTestSystemInstruction(patientInfo)
+    : buildSystemInstruction(patientInfo);
+  const promptVars = {
     species: speciesLabel(patientInfo.species),
     breed: patientInfo.breed,
     weight: String(patientInfo.weight),
@@ -227,7 +412,10 @@ export async function getVeterinaryAdvice(
     exams_data: exams && exams.length > 0
       ? `${exams.length} exame(s) anexado(s) nesta consulta (imagem ou PDF). Interprete os arquivos enviados e correlacione com a queixa.`
       : 'Nenhum exame complementar anexado.',
-  });
+  };
+  const userPrompt = USE_TEST_SYSTEM_INSTRUCTION
+    ? fillTestPrompt(promptVars)
+    : fillPromptTemplate(promptVars);
 
   try {
     const {text} = await postClaude<{text: string}>('/api/claude/advice', {

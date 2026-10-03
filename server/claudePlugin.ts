@@ -5,7 +5,7 @@ import instructions from '../src/services/instructions.json';
 
 type EnvMap = Record<string, string | undefined>;
 
-const CLAUDE_MODEL = 'claude-sonnet-5-5';
+const CLAUDE_MODEL = 'claude-haiku-4-5';
 const BODY_LIMIT = 16 * 1024 * 1024;
 
 const diagnosisOutputSchema = {
@@ -146,7 +146,7 @@ function mapClaudeError(error: unknown): {status: number; message: string} {
     return {status: 503, message: 'O Claude está com alta demanda agora. Espere uns 20 segundos e gere o relatório de novo.'};
   }
   if (status === 404 || message.includes('not_found')) {
-    return {status: 404, message: 'O modelo Claude Sonnet 5.5 não está disponível nesta chave.'};
+    return {status: 404, message: `O modelo ${CLAUDE_MODEL} não está disponível nesta chave.`};
   }
   if (isTimeoutError(error) || message.includes('tempo limite')) {
     return {status: 504, message: 'O Claude demorou demais para responder. Tente gerar o diagnóstico novamente.'};
@@ -193,12 +193,28 @@ function createClient(env: EnvMap): Anthropic {
   return new Anthropic({apiKey, timeout: CLAUDE_REQUEST_TIMEOUT_MS, maxRetries: 0});
 }
 
+function modelSupportsEffort(model: string): boolean {
+  return !/haiku/i.test(model);
+}
+
+function buildOutputConfig(withSchema: boolean): {effort?: 'medium'; format?: {type: 'json_schema'; schema: typeof diagnosisOutputSchema}} | undefined {
+  const supportsEffort = modelSupportsEffort(CLAUDE_MODEL);
+  if (withSchema) {
+    return {
+      ...(supportsEffort ? {effort: 'medium' as const} : {}),
+      format: {type: 'json_schema', schema: diagnosisOutputSchema},
+    };
+  }
+  return supportsEffort ? {effort: 'medium'} : undefined;
+}
+
 function isStructuredOutputRejected(error: unknown): boolean {
   if (isTimeoutError(error)) return false;
   const message = error instanceof Error ? error.message : String(error);
   return message.includes('output_config')
     || message.includes('json_schema')
-    || message.includes('structured outputs');
+    || message.includes('structured outputs')
+    || message.includes('effort parameter');
 }
 
 async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
@@ -219,17 +235,13 @@ async function createAdviceMessage(
   content: Anthropic.ContentBlockParam[],
   withSchema: boolean
 ): Promise<Anthropic.Message> {
+  const outputConfig = buildOutputConfig(withSchema);
   return withTimeout(client.messages.create({
     model: CLAUDE_MODEL,
-    max_tokens: 8192,
+    max_tokens: 16384,
     system: systemInstruction,
     messages: [{role: 'user', content}],
-    output_config: withSchema
-      ? {
-          effort: 'medium',
-          format: {type: 'json_schema', schema: diagnosisOutputSchema},
-        }
-      : {effort: 'medium'},
+    ...(outputConfig ? {output_config: outputConfig} : {}),
   }), CLAUDE_REQUEST_TIMEOUT_MS);
 }
 
@@ -293,7 +305,7 @@ function attachClaudeRoutes(server: ViteDevServer, env: EnvMap): void {
       await handleTranscribe(req, res, env);
     } catch (error) {
       const mapped = mapClaudeError(error);
-      console.error('Claude API error:', mapped.message);
+      console.error('Claude API error:', mapped.message, error instanceof Error ? error.message : error);
       try {
         sendJson(res, mapped.status, {error: mapped.message});
       } catch (sendError) {

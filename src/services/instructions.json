@@ -12,10 +12,10 @@
      },
      "model_parameters": {
           "recommended_reasoning_models": [
-               "claude-sonnet-5-5"
+               "claude-sonnet-5"
           ],
           "recommended_multimodal_audio_models": [
-               "claude-sonnet-5-5"
+               "claude-sonnet-5"
           ],
           "temperature": 0.2,
           "top_p": 0.6,
