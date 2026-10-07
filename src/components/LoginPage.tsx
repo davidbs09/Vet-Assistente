@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { AlertCircle, CheckCircle2, Eye, EyeOff, Loader2, Lock, Stethoscope, ShieldAlert, ShieldCheck, X } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Eye, EyeOff, Loader2, Lock, Stethoscope, ShieldCheck } from 'lucide-react';
 import fundoLogin from '../source/fundo-login.png';
 import { validateLoginIdentifier, validateNewPassword } from '../services/authService';
 import { PASSWORD_POLICY_MESSAGE } from '../shared/passwordPolicy';
+import AccessTermsModal from './auth/AccessTermsModal';
+import SupportContacts from './auth/SupportContacts';
 
 export type LoginPageView = 'home' | 'login' | 'register' | 'forgot' | 'new-password';
 
@@ -28,16 +29,6 @@ export interface LoginPageProps {
 }
 
 const DEFAULT_HERO_IMAGE = fundoLogin;
-const TERMS_UNLOCK_SECONDS = 5;
-
-const ACCESS_TERMS_TITLE = 'Antes de solicitar acesso, leia com atenção';
-const ACCESS_TERMS_SUBTITLE = 'É obrigatório estar de acordo com estes termos para usar o Vet Assistente.';
-const ACCESS_TERMS_TEXT = [
-  'Atenção: as informações geradas por este sistema são exclusivamente de apoio à decisão clínica. Elas não substituem exame físico, anamnese, interpretação profissional nem o julgamento do Médico-Veterinário responsável pelo paciente.',
-  'O diagnóstico, a conduta terapêutica, a prescrição, o cálculo de doses e qualquer decisão clínica devem ser realizados, conferidos e assumidos exclusivamente pelo profissional habilitado.',
-  'O uso é destinado a médicos-veterinários. Profissionais em início de carreira devem tratar o relatório como um auxílio, nunca como conduta pronta. Em caso de dúvida, priorize a literatura, a legislação vigente e a reavaliação do paciente.',
-  'Ao continuar, você declara que leu este aviso, compreende os limites da ferramenta e assume a responsabilidade ética e profissional pelo uso das informações no atendimento.',
-].join('\n\n');
 
 function PasswordField({
   id,
@@ -81,118 +72,6 @@ function PasswordField({
         >
           {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
         </button>
-      </div>
-    </div>
-  );
-}
-
-function AccessTermsModal({
-  open,
-  onClose,
-  onAccept,
-}: {
-  open: boolean;
-  onClose: () => void;
-  onAccept: () => void;
-}) {
-  const [secondsLeft, setSecondsLeft] = useState(TERMS_UNLOCK_SECONDS);
-  const [agreed, setAgreed] = useState(false);
-
-  useEffect(() => {
-    if (!open) return;
-    setSecondsLeft(TERMS_UNLOCK_SECONDS);
-    setAgreed(false);
-    const timer = window.setInterval(() => {
-      setSecondsLeft((current) => {
-        if (current <= 1) {
-          window.clearInterval(timer);
-          return 0;
-        }
-        return current - 1;
-      });
-    }, 1000);
-    return () => window.clearInterval(timer);
-  }, [open]);
-
-  if (!open) return null;
-  const locked = secondsLeft > 0;
-
-  return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-      <button
-        type="button"
-        className="absolute inset-0 bg-slate-900/50"
-        onClick={onClose}
-        aria-label="Fechar termos"
-      />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="access-terms-title"
-        className="relative z-10 flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
-      >
-        <div className="flex items-start justify-between gap-3 border-b border-amber-100 bg-amber-50 px-6 py-5">
-          <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
-              <ShieldAlert className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-widest text-amber-800">Obrigatório</p>
-              <h2 id="access-terms-title" className="mt-1 text-lg font-bold leading-snug text-slate-900">
-                {ACCESS_TERMS_TITLE}
-              </h2>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg p-1 text-slate-400 hover:bg-white hover:text-slate-700 cursor-pointer"
-            aria-label="Fechar"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="overflow-y-auto px-6 py-5">
-          <p className="text-sm font-semibold text-slate-800">{ACCESS_TERMS_SUBTITLE}</p>
-          <div className="mt-4 space-y-3 text-sm leading-relaxed text-slate-600 whitespace-pre-line">
-            {ACCESS_TERMS_TEXT}
-          </div>
-        </div>
-
-        <div className="space-y-4 border-t border-slate-100 px-6 py-5">
-          <label className={`flex items-start gap-3 rounded-xl border p-3 ${locked ? 'cursor-not-allowed border-slate-200 bg-slate-50' : 'cursor-pointer border-emerald-200 bg-emerald-50/60'}`}>
-            <input
-              type="checkbox"
-              checked={agreed}
-              disabled={locked}
-              onChange={(event) => setAgreed(event.target.checked)}
-              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-700 focus:ring-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
-            />
-            <span className="text-sm leading-relaxed text-slate-700">
-              {locked
-                ? `Aguarde ${secondsLeft} segundo${secondsLeft === 1 ? '' : 's'} para declarar que está de acordo.`
-                : 'Declaro que li, compreendi e estou de acordo com os termos acima. Sei que o relatório da IA é apenas um auxílio e que a responsabilidade clínica é exclusivamente minha, como médico-veterinário.'}
-            </span>
-          </label>
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 cursor-pointer"
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              onClick={onAccept}
-              disabled={!agreed || locked}
-              className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
-            >
-              Próximo
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   );
@@ -344,26 +223,16 @@ export default function LoginPage({
 
   return (
     <>
-    <div className="relative min-h-screen overflow-hidden bg-white">
-      <div className="absolute inset-y-0 right-0 hidden w-[58%] lg:block">
-        <div
-          className="absolute inset-0 bg-cover bg-center"
-          style={{
-            backgroundImage: `url(${heroImageUrl})`,
-            maskImage:
-              'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.35) 22%, #000 48%)',
-            WebkitMaskImage:
-              'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.35) 22%, #000 48%)',
-          }}
+    <div className="relative min-h-screen bg-white">
+      <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[50%] lg:block">
+        <img
+          src={heroImageUrl}
+          alt=""
+          decoding="async"
+          fetchPriority="low"
+          className="h-full w-full object-cover"
         />
-        <div
-          className="absolute inset-y-0 left-0 w-2/3 backdrop-blur-md"
-          style={{
-            maskImage: 'linear-gradient(to right, #000 0%, transparent 75%)',
-            WebkitMaskImage: 'linear-gradient(to right, #000 0%, transparent 75%)',
-          }}
-        />
-        <div className="absolute inset-0 bg-gradient-to-r from-white via-white/25 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-r from-white via-white/85 to-white/20" />
       </div>
 
       <header className="absolute inset-x-0 top-0 z-20 flex items-center justify-between px-6 py-6 sm:px-10 lg:px-16">
@@ -395,12 +264,7 @@ export default function LoginPage({
       </header>
 
       <div className="relative z-10 flex min-h-screen items-center px-6 sm:px-10 lg:px-16">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="w-full max-w-xl py-28"
-        >
+        <div className="w-full max-w-xl py-28">
           <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
             <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
             Uso exclusivo de médicos veterinários
@@ -461,15 +325,9 @@ export default function LoginPage({
             </div>
           )}
 
-          <AnimatePresence mode="wait">
+          <div>
             {view === 'home' && (
-              <motion.div
-                key="home-actions"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                className="mt-8 flex flex-col gap-3 sm:flex-row"
-              >
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <button
                   type="button"
                   onClick={requestAccess}
@@ -484,17 +342,13 @@ export default function LoginPage({
                 >
                   Já tenho senha
                 </button>
-              </motion.div>
+              </div>
             )}
 
             {view === 'login' && (
-              <motion.form
-                key="login-form"
+              <form
                 onSubmit={handleLoginSubmit}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                className="mt-8 space-y-4 rounded-2xl border border-slate-200 bg-white/90 p-5 shadow-sm backdrop-blur"
+                className="mt-8 space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
               >
                 <div>
                   <h2 className="text-lg font-semibold text-slate-900">Entrar</h2>
@@ -552,17 +406,13 @@ export default function LoginPage({
                 >
                   Ainda não tenho acesso — solicitar cadastro
                 </button>
-              </motion.form>
+              </form>
             )}
 
             {view === 'register' && (
-              <motion.form
-                key="register-form"
+              <form
                 onSubmit={handleRegisterSubmit}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                className="mt-8 space-y-4 rounded-2xl border border-slate-200 bg-white/90 p-5 shadow-sm backdrop-blur"
+                className="mt-8 space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
               >
                 <div>
                   <h2 className="text-lg font-semibold text-slate-900">Solicitar acesso</h2>
@@ -644,17 +494,13 @@ export default function LoginPage({
                 >
                   Já tenho senha — entrar
                 </button>
-              </motion.form>
+              </form>
             )}
 
             {view === 'forgot' && (
-              <motion.form
-                key="forgot-form"
+              <form
                 onSubmit={handleForgotSubmit}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                className="mt-8 space-y-4 rounded-2xl border border-slate-200 bg-white/90 p-5 shadow-sm backdrop-blur"
+                className="mt-8 space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
               >
                 <div>
                   <h2 className="text-lg font-semibold text-slate-900">Resetar senha</h2>
@@ -699,17 +545,13 @@ export default function LoginPage({
                 >
                   Voltar para o login
                 </button>
-              </motion.form>
+              </form>
             )}
 
             {view === 'new-password' && (
-              <motion.form
-                key="new-password-form"
+              <form
                 onSubmit={handleNewPasswordSubmit}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                className="mt-8 space-y-4 rounded-2xl border border-slate-200 bg-white/90 p-5 shadow-sm backdrop-blur"
+                className="mt-8 space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
               >
                 <div>
                   <h2 className="text-lg font-semibold text-slate-900">Definir nova senha</h2>
@@ -764,15 +606,19 @@ export default function LoginPage({
                 >
                   Voltar para o login
                 </button>
-              </motion.form>
+              </form>
             )}
-          </AnimatePresence>
+          </div>
 
-          <p className="mt-6 flex items-center gap-1.5 text-xs text-slate-400">
+          <div className="mt-10 border-t border-slate-100 pt-5">
+            <SupportContacts />
+          </div>
+
+          <p className="mt-5 flex items-center gap-1.5 text-xs text-slate-400">
             <Lock className="h-3.5 w-3.5 text-slate-400" />
             Cadastro validado pelo CRMV e autorizado manualmente para evitar indução.
           </p>
-        </motion.div>
+        </div>
       </div>
 
     </div>
