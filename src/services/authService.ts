@@ -164,7 +164,7 @@ export async function assertActiveAccess(uid: string, email?: string | null): Pr
 
   if (requiresPasswordReset(profile)) {
     throw authError(
-      'Sua senha foi resetada pelo administrador. Deixe o campo de senha em branco e defina uma nova senha.',
+      'Sua senha foi resetada. Siga as instruções do e-mail que enviamos para criar uma nova senha.',
       'auth/password-reset-required'
     );
   }
@@ -575,19 +575,45 @@ export function subscribeUsers(
   );
 }
 
-export async function activateUser(userId: string): Promise<void> {
-  await updateDoc(usersRef(userId), {
-    status: 'active',
-    activatedAt: serverTimestamp(),
-    revokedAt: null,
+export type AdminActionResult = {
+  emailSent?: boolean;
+  emailTo?: string;
+  emailError?: string | null;
+  emailId?: string | null;
+};
+
+async function postAdminAction(path: string, body: Record<string, unknown>): Promise<AdminActionResult> {
+  const token = await getAuthToken(true);
+  if (!token) {
+    throw authError('Sessão de administrador inválida. Entre novamente.', 'auth/unauthenticated');
+  }
+
+  const response = await fetch(path, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(body),
   });
+
+  const payload = await response.json().catch(() => ({})) as AdminActionResult & {error?: string};
+  if (!response.ok) {
+    throw authError(payload.error || 'Não foi possível concluir a operação.', 'auth/admin-action-failed');
+  }
+  return payload;
 }
 
-export async function revokeUserAccess(userId: string): Promise<void> {
-  await updateDoc(usersRef(userId), {
-    status: 'revoked',
-    revokedAt: serverTimestamp(),
-  });
+export async function activateUser(userId: string): Promise<AdminActionResult> {
+  return postAdminAction('/api/admin/set-access', {userId, action: 'activate'});
+}
+
+export async function revokeUserAccess(userId: string): Promise<AdminActionResult> {
+  return postAdminAction('/api/admin/set-access', {userId, action: 'revoke'});
+}
+
+export async function sendAdminTestEmail(to?: string): Promise<AdminActionResult> {
+  return postAdminAction('/api/admin/test-email', to ? {to} : {});
 }
 
 export async function logoutFromAuth(): Promise<void> {
@@ -618,6 +644,7 @@ export function mapAuthError(error: unknown): string {
     case 'auth/reset-complete-failed':
     case 'auth/reset-request-failed':
     case 'auth/register-failed':
+    case 'auth/admin-action-failed':
       return message;
     case 'auth/invalid-credential':
     case 'auth/wrong-password':

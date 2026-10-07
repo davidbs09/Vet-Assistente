@@ -522,7 +522,7 @@ export default function LoginPage({
                 <div>
                   <h2 className="text-lg font-semibold text-slate-900">Resetar senha</h2>
                   <p className="mt-1 text-xs text-slate-500">
-                    Informe o e-mail da conta. Em seguida você verá como seguir com o administrador.
+                    Informe o e-mail da conta. O administrador será avisado e você receberá um e-mail com as instruções quando o reset for concluído.
                   </p>
                 </div>
                 <div className="space-y-1.5">
@@ -545,8 +545,7 @@ export default function LoginPage({
                 </div>
                 {forgotSent && (
                   <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs leading-relaxed text-emerald-800">
-                    Pedido registrado. Entre em contato com o ADMIN para resetar a senha desta conta.
-                    Depois disso, no próximo login, deixe a senha em branco e defina uma nova.
+                    Pedido enviado. Aguarde o e-mail com as instruções. Não é necessário entrar em contato com o administrador.
                   </div>
                 )}
                 <button

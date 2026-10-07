@@ -2,11 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { KeyRound, Loader2, ShieldCheck, UserCheck, UserX, X } from 'lucide-react';
 import {
   activateUser,
+  AdminActionResult,
   mapAuthError,
   requestAdminPasswordReset,
   requestedPasswordReset,
   requiresPasswordReset,
   revokeUserAccess,
+  sendAdminTestEmail,
   subscribeUsers,
   UserProfile,
 } from '../services/authService';
@@ -17,6 +19,13 @@ export interface AdminUsersPageProps {
 
 function emailsMatch(typed: string, actual?: string | null): boolean {
   return typed.trim().toLowerCase() === String(actual || '').trim().toLowerCase();
+}
+
+function emailNote(result: AdminActionResult, fallbackTo?: string): string {
+  const to = result.emailTo || fallbackTo;
+  if (result.emailSent && to) return ` E-mail aceito pelo Brevo para ${to}. Se não chegar, veja spam e os logs do Brevo.`;
+  if (result.emailError) return ` O e-mail não foi enviado: ${result.emailError}`;
+  return ' O e-mail não foi enviado.';
 }
 
 function AdminUsersPage({ currentUserId }: AdminUsersPageProps) {
@@ -53,9 +62,10 @@ function AdminUsersPage({ currentUserId }: AdminUsersPageProps) {
     setError(null);
     setSuccess(null);
     try {
-      await activateUser(userId);
+      const result = await activateUser(userId);
+      setSuccess(`Acesso liberado.${emailNote(result)}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Não foi possível ativar esta conta.');
+      setError(mapAuthError(err));
     } finally {
       setBusyId(null);
     }
@@ -73,9 +83,10 @@ function AdminUsersPage({ currentUserId }: AdminUsersPageProps) {
     setError(null);
     setSuccess(null);
     try {
-      await revokeUserAccess(user.id);
+      const result = await revokeUserAccess(user.id);
+      setSuccess(`Acesso revogado.${emailNote(result, user.email)}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Não foi possível remover o acesso desta conta.');
+      setError(mapAuthError(err));
     } finally {
       setBusyId(null);
     }
@@ -90,7 +101,7 @@ function AdminUsersPage({ currentUserId }: AdminUsersPageProps) {
     setSuccess(null);
     try {
       await requestAdminPasswordReset(resetTarget.id);
-      setSuccess(`A senha de ${resetTarget.displayName || resetTarget.email} foi apagada. A pessoa entra sem senha e define uma nova.`);
+      setSuccess(`A senha de ${resetTarget.displayName || resetTarget.email} foi resetada. O cliente recebe um e-mail com as instruções. Se não chegar, veja spam e os logs do Brevo.`);
       setResetTarget(null);
       setResetConfirm('');
     } catch (err) {
@@ -127,6 +138,27 @@ function AdminUsersPage({ currentUserId }: AdminUsersPageProps) {
         <p className="text-sm text-slate-500">
           Quando um cliente pedir reset, o status muda para Pediu reset de senha. Aí você confirma o e-mail e apaga a senha antiga.
         </p>
+        <button
+          type="button"
+          onClick={async () => {
+            setBusyId('test-email');
+            setError(null);
+            setSuccess(null);
+            try {
+              const result = await sendAdminTestEmail();
+              setSuccess(`Teste de e-mail:${emailNote(result)}`);
+            } catch (err) {
+              setError(mapAuthError(err));
+            } finally {
+              setBusyId(null);
+            }
+          }}
+          disabled={busyId === 'test-email'}
+          className="mt-3 inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 cursor-pointer"
+        >
+          {busyId === 'test-email' ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
+          Enviar e-mail de teste para o admin
+        </button>
       </div>
 
       {error && (
@@ -270,7 +302,7 @@ function AdminUsersPage({ currentUserId }: AdminUsersPageProps) {
             <h3 className="mt-4 text-lg font-semibold text-slate-900">Resetar senha</h3>
             <p className="mt-2 text-sm leading-relaxed text-slate-600">
               A senha atual de <strong>{resetTarget.displayName || resetTarget.email}</strong> será
-              apagada. Essa pessoa só entra de novo deixando a senha em branco e criando uma nova.
+              apagada. O cliente recebe um e-mail em ajudavoce.com.br com o passo a passo para criar a nova senha.
             </p>
             <p className="mt-3 text-sm text-slate-600">
               Para confirmar, informe o e-mail desta conta.

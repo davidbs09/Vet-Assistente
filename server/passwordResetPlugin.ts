@@ -5,6 +5,22 @@ import {cert, getApps, initializeApp, type App} from 'firebase-admin/app';
 import {getAuth} from 'firebase-admin/auth';
 import {FieldValue, getFirestore} from 'firebase-admin/firestore';
 import type {Plugin, ViteDevServer} from 'vite';
+import {adminNotifyEmail, sendBrevoEmail, type SendResult} from './email/brevoClient';
+import {
+  notifyAdminAccessRequested,
+  notifyAdminPasswordResetRequested,
+  notifyUserAccessChanged,
+  notifyUserPasswordResetByAdmin,
+} from './email/notify';
+
+function emailPayload(result: SendResult) {
+  return {
+    emailSent: result.sent,
+    emailTo: result.to,
+    emailError: result.error || null,
+    emailId: result.messageId || null,
+  };
+}
 
 type EnvMap = Record<string, string | undefined>;
 
@@ -170,12 +186,22 @@ async function handleRequestAccess(req: IncomingMessage, res: ServerResponse, en
   const userRef = db.collection(USERS_COLLECTION).doc(uid);
   const userSnap = await userRef.get();
   if (userSnap.exists) {
-    const status = userSnap.data()?.status;
+    const existing = userSnap.data() || {};
+    const status = existing.status;
+    if (status === 'pending' || status === 'revoked') {
+      await notifyAdminAccessRequested(env, {
+        email,
+        displayName: String(existing.displayName || displayName),
+        crmv: String(existing.crmv || crmv),
+      });
+    }
     sendJson(res, 409, {
       error: status === 'pending'
         ? 'Este e-mail já possui cadastro. Aguarde a ativação pelo administrador.'
+        : status === 'revoked'
+          ? 'Seu acesso foi removido pelo administrador. Solicite uma nova liberação.'
         : 'Este e-mail já possui cadastro. Entre com sua senha para acessar.',
-      code: status === 'pending' ? 'pending' : 'exists',
+      code: status === 'pending' ? 'pending' : status === 'revoked' ? 'revoked' : 'exists',
     });
     return;
   }
@@ -196,6 +222,7 @@ async function handleRequestAccess(req: IncomingMessage, res: ServerResponse, en
     createdAt: FieldValue.serverTimestamp(),
   });
 
+  await notifyAdminAccessRequested(env, {email, displayName, crmv});
   sendJson(res, 200, {ok: true});
 }
 
@@ -280,7 +307,11 @@ async function handleAdminReset(req: IncomingMessage, res: ServerResponse, env: 
     {merge: true}
   );
 
-  sendJson(res, 200, {ok: true});
+  const emailResult = await notifyUserPasswordResetByAdmin(env, {
+    email,
+    displayName: String(target.displayName || ''),
+  });
+  sendJson(res, 200, {ok: true, ...emailPayload(emailResult)});
 }
 
 async function handleRequestReset(req: IncomingMessage, res: ServerResponse, env: EnvMap): Promise<void> {
@@ -317,7 +348,112 @@ async function handleRequestReset(req: IncomingMessage, res: ServerResponse, env
     passwordResetRequestedAt: FieldValue.serverTimestamp(),
   });
 
+  await notifyAdminPasswordResetRequested(env, {
+    email,
+    displayName: String(profile.displayName || ''),
+    crmv: String(profile.crmv || ''),
+  });
   sendJson(res, 200, {ok: true});
+}
+
+async function handleSetAccess(req: IncomingMessage, res: ServerResponse, env: EnvMap): Promise<void> {
+  const token = bearerToken(req);
+  if (!token) {
+    sendJson(res, 401, {error: 'Sessão de administrador inválida.'});
+    return;
+  }
+
+  const body = await readJsonBody(req);
+  const userId = typeof body.userId === 'string' ? body.userId.trim() : '';
+  const action = body.action === 'revoke' ? 'revoke' : body.action === 'activate' ? 'activate' : '';
+  if (!userId || !action) {
+    sendJson(res, 400, {error: 'Informe o usuário e a ação de acesso.'});
+    return;
+  }
+
+  const app = initAdminApp(env);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  const decoded = await auth.verifyIdToken(token, true);
+  const callerSnap = await db.collection(USERS_COLLECTION).doc(decoded.uid).get();
+  if (!callerSnap.exists || !isAdminProfile(callerSnap.data())) {
+    sendJson(res, 403, {error: 'Apenas o administrador pode alterar acessos.'});
+    return;
+  }
+
+  if (userId === decoded.uid) {
+    sendJson(res, 400, {error: 'Você não pode alterar o próprio acesso por aqui.'});
+    return;
+  }
+
+  const targetRef = db.collection(USERS_COLLECTION).doc(userId);
+  const targetSnap = await targetRef.get();
+  if (!targetSnap.exists) {
+    sendJson(res, 404, {error: 'Usuário não encontrado.'});
+    return;
+  }
+
+  const target = targetSnap.data() || {};
+  if (isAdminProfile(target)) {
+    sendJson(res, 400, {error: 'Não é permitido alterar o acesso de outro administrador.'});
+    return;
+  }
+
+  if (action === 'activate') {
+    await targetRef.update({
+      status: 'active',
+      activatedAt: FieldValue.serverTimestamp(),
+      revokedAt: null,
+    });
+  } else {
+    await targetRef.update({
+      status: 'revoked',
+      revokedAt: FieldValue.serverTimestamp(),
+    });
+    await db.collection(SESSIONS_COLLECTION).doc(userId).set(
+      {
+        isActive: false,
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      {merge: true}
+    );
+  }
+
+  const emailResult = await notifyUserAccessChanged(env, {
+    email: String(target.email || ''),
+    displayName: String(target.displayName || ''),
+  }, action);
+  sendJson(res, 200, {ok: true, action, ...emailPayload(emailResult)});
+}
+
+async function handleTestEmail(req: IncomingMessage, res: ServerResponse, env: EnvMap): Promise<void> {
+  const token = bearerToken(req);
+  if (!token) {
+    sendJson(res, 401, {error: 'Sessão de administrador inválida.'});
+    return;
+  }
+
+  const app = initAdminApp(env);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  const decoded = await auth.verifyIdToken(token, true);
+  const callerSnap = await db.collection(USERS_COLLECTION).doc(decoded.uid).get();
+  if (!callerSnap.exists || !isAdminProfile(callerSnap.data())) {
+    sendJson(res, 403, {error: 'Apenas o administrador pode testar e-mail.'});
+    return;
+  }
+
+  const body = await readJsonBody(req);
+  const requested = typeof body.to === 'string' ? body.to.trim().toLowerCase() : '';
+  const to = requested && requested.includes('@') ? requested : adminNotifyEmail(env);
+  const emailResult = await sendBrevoEmail(env, {
+    to: {email: to},
+    subject: '[Vet Assistente] Teste de e-mail',
+    text: 'Se você recebeu esta mensagem, o SMTP do Brevo está entregando para este destinatário.',
+    html: '<p>Se você recebeu esta mensagem, o SMTP do Brevo está entregando para este destinatário.</p>',
+  });
+  sendJson(res, emailResult.sent ? 200 : 502, {ok: emailResult.sent, ...emailPayload(emailResult)});
 }
 
 async function handleCompleteReset(req: IncomingMessage, res: ServerResponse, env: EnvMap): Promise<void> {
@@ -398,6 +534,8 @@ function attachPasswordResetRoutes(server: ViteDevServer, env: EnvMap): void {
       && path !== '/api/auth/complete-password-reset'
       && path !== '/api/auth/request-password-reset'
       && path !== '/api/auth/request-access'
+      && path !== '/api/admin/set-access'
+      && path !== '/api/admin/test-email'
     ) {
       next();
       return;
@@ -419,6 +557,14 @@ function attachPasswordResetRoutes(server: ViteDevServer, env: EnvMap): void {
       }
       if (path === '/api/auth/request-access') {
         await handleRequestAccess(req, res, env);
+        return;
+      }
+      if (path === '/api/admin/set-access') {
+        await handleSetAccess(req, res, env);
+        return;
+      }
+      if (path === '/api/admin/test-email') {
+        await handleTestEmail(req, res, env);
         return;
       }
       await handleCompleteReset(req, res, env);
@@ -452,8 +598,8 @@ function attachPasswordResetRoutes(server: ViteDevServer, env: EnvMap): void {
         });
         return;
       }
-      console.error('Password reset API error:', error);
-      sendJson(res, 500, {error: 'Não foi possível concluir o reset de senha.'});
+      console.error('Auth API error:', error);
+      sendJson(res, 500, {error: 'Não foi possível concluir a operação de acesso.'});
     }
   });
 }

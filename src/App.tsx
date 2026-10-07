@@ -720,7 +720,7 @@ export default function App() {
       setLoginSuccess(null);
       await registerWithEmail(values);
       setLoginSuccess(
-        'Cadastro enviado. Sua conta ficará pendente até o administrador autorizar o acesso.'
+        'Cadastro enviado. Você receberá um e-mail quando o administrador liberar o acesso.'
       );
     } catch (error: unknown) {
       console.error('Register error:', error);

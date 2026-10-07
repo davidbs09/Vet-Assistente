@@ -1,5 +1,13 @@
 export const PASSWORD_EXAMPLE = 'Senha@123';
 
+export const PASSWORD_REQUIREMENTS = [
+  'No mínimo 8 caracteres',
+  'Pelo menos 1 letra maiúscula',
+  'Pelo menos 1 letra minúscula',
+  'Pelo menos 1 número',
+  'Pelo menos 1 caractere especial',
+];
+
 export const PASSWORD_POLICY_MESSAGE =
   `A senha precisa ter letra maiúscula, minúscula, número e caractere especial. Exemplo: ${PASSWORD_EXAMPLE}`;
 
