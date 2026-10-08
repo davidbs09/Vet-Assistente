@@ -312,18 +312,27 @@ export default function NewConsultationView({ patient, onBack, onComplete }: { p
                 )}
 
                 <div>
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Tratamento Recomendado</h4>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Tratamento e esclarecimento</h4>
+                  <p className="mt-1 text-xs text-slate-500">Conduta imediata e o que fazer para descobrir qual hipótese é o problema real.</p>
                   <div className="prose prose-sm mt-2 text-slate-700">
                     <ReactMarkdown>{result.treatment}</ReactMarkdown>
                   </div>
                 </div>
 
                 <div>
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Medicamentos e Doses (Baseado em {patient.weight}kg)</h4>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Medicamentos da conduta ({patient.weight}kg)</h4>
+                  <p className="mt-1 text-xs text-slate-500">Tudo que o tratamento pediu, com dose — sem limitar a um por hipótese.</p>
                   <div className="mt-2 space-y-3">
                     {(result.medications ?? []).map((med, i) => (
                       <div key={i} className="rounded-xl border border-emerald-100 bg-white p-4 shadow-sm">
-                        <div className="font-bold text-emerald-700">{med.name}</div>
+                        <div className="flex flex-wrap items-baseline justify-between gap-2">
+                          <div className="font-bold text-emerald-700">{med.name}</div>
+                          {med.forDiagnosis && (
+                            <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-800">
+                              {med.forDiagnosis}
+                            </span>
+                          )}
+                        </div>
                         <div className="mt-1 grid grid-cols-2 gap-2 text-xs text-slate-500">
                           <div><span className="font-medium text-slate-700">Dose:</span> {med.dosage}</div>
                           <div><span className="font-medium text-slate-700">Freq:</span> {med.frequency}</div>
@@ -335,7 +344,8 @@ export default function NewConsultationView({ patient, onBack, onComplete }: { p
                 </div>
 
                 <div>
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Exames Complementares Sugeridos</h4>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Exames para diferenciar as hipóteses</h4>
+                  <p className="mt-1 text-xs text-slate-500">Cada exame deve ajudar a confirmar ou afastar uma das doenças acima.</p>
                   <ul className="mt-2 list-inside list-disc text-sm text-slate-700">
                     {(result.suggestedExams ?? []).map((exam, i) => <li key={i}>{typeof exam === 'string' ? exam : String(exam)}</li>)}
                   </ul>

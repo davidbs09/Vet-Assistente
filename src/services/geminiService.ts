@@ -16,6 +16,7 @@ export interface DiagnosisResult {
     dosage: string;
     frequency: string;
     duration: string;
+    forDiagnosis?: string;
   }[];
   suggestedExams: string[];
   sources: string[];
@@ -45,10 +46,10 @@ Exames: ${vars.exams_data}
 
 Responda APENAS um JSON válido, sem markdown e sem texto fora do JSON, com estas chaves em string/array plano:
 - diagnosis: string
-- differentials: [{disease, likelihood, reasoning}]
-- treatment: string (markdown)
-- medications: [{name, dosage, frequency, duration}]
-- suggestedExams: [string]
+- differentials: [{disease, likelihood, reasoning}] — likelihood só: "Mais provável" | "Plausível" | "Menos provável". Nunca use "A descartar".
+- treatment: string (markdown) — conduta imediata E o plano para descobrir qual das hipóteses é a verdadeira. Este campo é o eixo: medications deve copiá-lo na risca.
+- medications: [{name, dosage, frequency, duration, forDiagnosis}] — prescrição da CONDUTA, não um fármaco por hipótese. Tudo que o treatment pedir (dor, êmese, fluido, antibiótico, protetor gástrico, etc.) vira item com dose. Sem limite de 3. forDiagnosis = objetivo da conduta (ex.: Controle da dor), não o nome da doença.
+- suggestedExams: [string] — cada exame deve dizer qual hipótese confirma ou separa das outras
 - sources: [string]
 
 Não aninhe diagnosis nem treatment como objeto. Inclua as 7 fontes obrigatórias.`;
@@ -70,12 +71,12 @@ Sua tarefa é fornecer diagnósticos e tratamentos baseados em evidências, pesq
 Para cada consulta, você deve:
 1. Analisar os sintomas e informações do paciente (espécie, raça, peso: ${patientInfo.weight}kg).
 2. Se houver exames (imagens ou PDFs convertidos em texto/imagem), analise-os cuidadosamente.
-3. Fornecer um diagnóstico provável.
-4. Sugerir um tratamento detalhado.
+3. Fornecer um diagnóstico provável e diferenciais com likelihood "Mais provável", "Plausível" ou "Menos provável". Nunca use "A descartar": menos provável ainda pode ser o caso.
+4. No treatment: estabilize o paciente e descreva como desvendar qual das hipóteses é o problema real (o que espera de cada exame e o que muda a conduta). O tratamento é o foco principal.
 5. Calcular as doses exatas dos medicamentos com base no peso do paciente (${patientInfo.weight}kg), seguindo estritamente as diretrizes do Vetsmart e Vetalfa.
 6. Apresentar as doses em comprimidos ou ml, dependendo do que for mais apropriado para o animal e o medicamento.
-7. Listar os medicamentos com nome, dose, frequência e duração.
-8. Sugerir exames complementares necessários para confirmar ou refinar o diagnóstico.
+7. Em medications, transcreva a farmacologia do treatment. Se a conduta cita dor, êmese, fluidoterapia, antibiótico, protetor, antiparasitário ou outro fármaco, cada um entra na lista com nome, dose, frequência e duração. Sem teto de 3 itens e sem "um por hipótese". forDiagnosis = objetivo da conduta (ex.: Controle da dor). Hipóteses não substituem a conduta: complete o tratamento primeiro; só depois acrescente o que for extra para um diferencial, se ainda faltar.
+8. Em suggestedExams, liste exames que separem essas hipóteses: cada item deve dizer o que confirma ou torna menos provável.
 9. Listar as fontes bibliográficas e sites consultados (incluindo obrigatoriamente as fontes citadas acima).
 
 Responda SEMPRE em formato JSON estruturado com as chaves: diagnosis, differentials, treatment, medications, suggestedExams, sources.`;
@@ -129,7 +130,7 @@ ${bullets(system_instruction.clinical_protocols.prescription_stewardship_rules)}
 
 REQUISITOS DE SAÍDA
 ${bullets(system_instruction.output_requirements)}
-- O campo "differentials" deve conter NO MÍNIMO 3 doenças distintas (não sinônimos da mesma entidade), da mais para a menos provável, com likelihood ("Mais provável" | "Plausível" | "A descartar") e raciocínio que justifique a POSIÇÃO de cada uma.
+- O campo "differentials" deve conter NO MÍNIMO 3 doenças distintas (não sinônimos da mesma entidade), da mais para a menos provável, com likelihood ("Mais provável" | "Plausível" | "Menos provável") e raciocínio que justifique a POSIÇÃO de cada uma. Nunca use "A descartar". A hipótese menos provável também deve ter medicação sugerida na lista.
 
 Responda SEMPRE em JSON válido no schema pedido.`;
 }
@@ -185,9 +186,14 @@ function extractFrequency(text: string): string {
 function likelihoodFromPosition(position: unknown): string {
   const n = Number(position);
   if (n === 1) return "Mais provável";
-  if (n === 2 || n === 3) return "Plausível";
-  if (n >= 4) return "A descartar";
+  if (n === 2) return "Plausível";
+  if (n >= 3) return "Menos provável";
   return "";
+}
+
+function normalizeLikelihood(value: string): string {
+  if (/descart/i.test(value)) return "Menos provável";
+  return value;
 }
 
 function flattenDiagnosis(value: unknown): string {
@@ -322,6 +328,7 @@ function normalizeMedication(item: unknown): DiagnosisResult["medications"][numb
     dosage: dosage || "Não informado",
     frequency: frequency || "Conforme orientação",
     duration: duration || "Conforme reavaliação",
+    forDiagnosis: pickText(record, ["forDiagnosis", "diagnosis", "hipotese", "indication"]) || undefined,
   };
 }
 
@@ -329,7 +336,7 @@ function normalizeDifferential(item: unknown): DifferentialDiagnosis {
   const record = item && typeof item === "object" ? item as Record<string, unknown> : {};
   return {
     disease: pickText(record, ["disease", "doenca", "name"], "Hipótese não nomeada"),
-    likelihood: pickText(record, ["likelihood"]) || likelihoodFromPosition(record.posicao) || "Plausível",
+    likelihood: normalizeLikelihood(pickText(record, ["likelihood"]) || likelihoodFromPosition(record.posicao) || "Plausível"),
     reasoning: pickText(record, ["reasoning", "justificativa"]),
   };
 }

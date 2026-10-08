@@ -27,33 +27,34 @@ const diagnosisOutputSchema = {
         required: ['disease', 'likelihood', 'reasoning'],
         properties: {
           disease: {type: 'string', description: 'Nome da doença ou síndrome.'},
-          likelihood: {type: 'string', description: 'Mais provável, Plausível ou A descartar.'},
+          likelihood: {type: 'string', description: 'Mais provável, Plausível ou Menos provável. Nunca use A descartar.'},
           reasoning: {type: 'string', description: 'Por que esta posição, achados a favor/contra e como diferenciar.'},
         },
       },
     },
     treatment: {
       type: 'string',
-      description: instructions.json_output_schema.properties.treatment.description,
+      description: 'Conduta imediata e plano para descobrir qual das hipóteses é o problema real.',
     },
     medications: {
       type: 'array',
-      description: instructions.json_output_schema.properties.medications.description,
+      description: 'Prescrição da conduta: cada fármaco citado no treatment (dor, êmese, fluido, antibiótico, etc.) com dose. Sem limite de 3. Não é um por hipótese.',
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['name', 'dosage', 'frequency', 'duration'],
+        required: ['name', 'dosage', 'frequency', 'duration', 'forDiagnosis'],
         properties: {
           name: {type: 'string', description: instructions.json_output_schema.properties.medications.items.properties.name.description},
           dosage: {type: 'string', description: instructions.json_output_schema.properties.medications.items.properties.dosage.description},
           frequency: {type: 'string', description: instructions.json_output_schema.properties.medications.items.properties.frequency.description},
           duration: {type: 'string', description: instructions.json_output_schema.properties.medications.items.properties.duration.description},
+          forDiagnosis: {type: 'string', description: 'Objetivo da conduta (ex.: Controle da dor, Antiemético, Fluidoterapia), não o nome da doença.'},
         },
       },
     },
     suggestedExams: {
       type: 'array',
-      description: instructions.json_output_schema.properties.suggestedExams.description,
+      description: 'Exames que separam as hipóteses. Cada item deve dizer o que confirma ou torna menos provável.',
       items: {type: 'string'},
     },
     sources: {

@@ -17,6 +17,6 @@
   ],
   "timeoutMs": 240000,
   "maxOutputTokens": 16384,
-  "temperature": 0.2,
+  "temperature": 0.5,
   "topP": 0.6
 }
