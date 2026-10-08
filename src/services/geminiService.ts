@@ -1,3 +1,4 @@
+import { AI_CONFIG } from "../shared/aiConfig";
 import instructions from "./instructions.json";
 
 export interface DifferentialDiagnosis {
@@ -357,17 +358,18 @@ function createTimeoutSignal(ms: number): AbortSignal {
 }
 
 function mapClientError(error: unknown, timeoutMs: number): Error {
+  const name = AI_CONFIG.displayName;
   if (error instanceof DOMException && error.name === 'AbortError') {
-    return new Error(`O Claude demorou mais de ${Math.round(timeoutMs / 1000)}s e a consulta foi interrompida. Tente de novo.`);
+    return new Error(`O ${name} demorou mais de ${Math.round(timeoutMs / 1000)}s e a consulta foi interrompida. Tente de novo.`);
   }
   const message = error instanceof Error ? error.message : String(error);
   if (message.includes('Failed to fetch') || message.includes('NetworkError') || message.includes('Network request failed')) {
-    return new Error('Não foi possível falar com o servidor do Claude. Confirme que o npm run dev está no ar e tente de novo.');
+    return new Error(`Não foi possível falar com o servidor do ${name}. Confirme que o npm run dev está no ar e tente de novo.`);
   }
-  return error instanceof Error ? error : new Error(message || 'Falha ao consultar o Claude.');
+  return error instanceof Error ? error : new Error(message || `Falha ao consultar o ${name}.`);
 }
 
-async function postClaude<T>(path: string, body: Record<string, unknown>, timeoutMs: number): Promise<T> {
+async function postAi<T>(path: string, body: Record<string, unknown>, timeoutMs: number): Promise<T> {
   let response: Response;
   try {
     response = await fetch(path, {
@@ -387,10 +389,10 @@ async function postClaude<T>(path: string, body: Record<string, unknown>, timeou
 
   const payload = await response.json().catch(() => ({})) as {error?: string; text?: string};
   if (!response.ok) {
-    throw new Error(payload.error || `O Claude retornou erro ${response.status}. Tente novamente.`);
+    throw new Error(payload.error || `O ${AI_CONFIG.displayName} retornou erro ${response.status}. Tente novamente.`);
   }
   if (typeof (payload as {text?: unknown}).text !== 'string' && path.includes('advice')) {
-    throw new Error('A resposta do Claude veio vazia. Gere o diagnóstico novamente.');
+    throw new Error(`A resposta do ${AI_CONFIG.displayName} veio vazia. Gere o diagnóstico novamente.`);
   }
   return payload as T;
 }
@@ -418,7 +420,7 @@ export async function getVeterinaryAdvice(
     : fillPromptTemplate(promptVars);
 
   try {
-    const {text} = await postClaude<{text: string}>('/api/claude/advice', {
+    const {text} = await postAi<{text: string}>(AI_CONFIG.routes.advice, {
       systemInstruction,
       userPrompt,
       exams: (exams || []).map((exam) => ({
@@ -428,11 +430,11 @@ export async function getVeterinaryAdvice(
     }, ADVICE_TIMEOUT_MS);
 
     if (!text?.trim()) {
-      throw new Error('A resposta do Claude veio vazia. Gere o diagnóstico novamente.');
+      throw new Error(`A resposta do ${AI_CONFIG.displayName} veio vazia. Gere o diagnóstico novamente.`);
     }
     const result = normalizeResult(parseModelJson(text));
     if (!result.diagnosis && !result.treatment) {
-      throw new Error('O Claude não montou o diagnóstico. Tente gerar novamente.');
+      throw new Error(`O ${AI_CONFIG.displayName} não montou o diagnóstico. Tente gerar novamente.`);
     }
     return result;
   } catch (error) {
@@ -442,7 +444,7 @@ export async function getVeterinaryAdvice(
 
 export async function transcribeAudio(audioBase64: string, mimeType: string): Promise<string> {
   try {
-    const {text} = await postClaude<{text: string}>('/api/claude/transcribe', {
+    const {text} = await postAi<{text: string}>(AI_CONFIG.routes.transcribe, {
       audioBase64,
       mimeType,
     }, TRANSCRIBE_TIMEOUT_MS);

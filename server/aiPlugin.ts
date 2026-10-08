@@ -1,11 +1,11 @@
-import Anthropic from '@anthropic-ai/sdk';
+import {GoogleGenAI} from '@google/genai';
 import type {IncomingMessage, ServerResponse} from 'http';
 import type {Plugin, ViteDevServer} from 'vite';
+import {AI_CONFIG} from '../src/shared/aiConfig';
 import instructions from '../src/services/instructions.json';
 
 type EnvMap = Record<string, string | undefined>;
 
-const CLAUDE_MODEL = 'claude-haiku-4-5';
 const BODY_LIMIT = 16 * 1024 * 1024;
 
 const diagnosisOutputSchema = {
@@ -64,9 +64,13 @@ const diagnosisOutputSchema = {
   },
 };
 
-function readClaudeKey(env: EnvMap): string {
-  const raw = env.CLAUDE_API_KEY || env.ANTHROPIC_API_KEY || '';
-  return raw.replace(/^["']|["']$/g, '').trim();
+function readApiKey(env: EnvMap): string {
+  for (const name of AI_CONFIG.apiKeyEnv) {
+    const raw = env[name] || '';
+    const value = raw.replace(/^["']|["']$/g, '').trim();
+    if (value) return value;
+  }
+  return '';
 }
 
 function readJsonBody(req: IncomingMessage, limit = BODY_LIMIT): Promise<Record<string, unknown>> {
@@ -127,122 +131,75 @@ function isTimeoutError(error: unknown): boolean {
     || message.includes('tempo limite');
 }
 
-function mapClaudeError(error: unknown): {status: number; message: string} {
+function mapAiError(error: unknown): {status: number; message: string} {
   const message = error instanceof Error ? error.message : String(error);
   const status = typeof error === 'object' && error && 'status' in error
     ? Number((error as {status?: number}).status)
     : 0;
+  const name = AI_CONFIG.displayName;
 
-  if (message.includes('CLAUDE_API_KEY não configurada')) {
+  if (message.includes('GEMINI_API_KEY não configurada')) {
     return {status: 503, message};
   }
-  if (status === 401 || message.includes('invalid x-api-key') || message.includes('authentication')) {
-    return {status: 401, message: 'A chave do Claude é inválida ou expirou. Confira CLAUDE_API_KEY no .env.'};
+  if (status === 401 || message.includes('API_KEY_INVALID') || message.includes('API key not valid') || message.includes('invalid api key')) {
+    return {status: 401, message: `A chave do ${name} é inválida ou expirou. Confira GEMINI_API_KEY no .env.`};
   }
-  if (status === 429 || message.includes('rate_limit')) {
-    return {status: 429, message: 'A cota ou o limite do Claude estourou. Aguarde um minuto e tente de novo.'};
+  if (status === 429 || message.includes('RESOURCE_EXHAUSTED') || message.includes('quota')) {
+    return {status: 429, message: `A cota ou o limite do ${name} estourou. Aguarde um minuto e tente de novo.`};
   }
-  if (status === 529 || status === 503 || message.includes('overloaded')) {
-    return {status: 503, message: 'O Claude está com alta demanda agora. Espere uns 20 segundos e gere o relatório de novo.'};
+  if (status === 503 || message.includes('UNAVAILABLE') || message.includes('overloaded')) {
+    return {status: 503, message: `O ${name} está com alta demanda agora. Espere uns 20 segundos e gere o relatório de novo.`};
   }
-  if (status === 404 || message.includes('not_found')) {
-    return {status: 404, message: `O modelo ${CLAUDE_MODEL} não está disponível nesta chave.`};
+  if (status === 404 || message.includes('NOT_FOUND') || message.includes('not found')) {
+    return {status: 404, message: `O modelo ${AI_CONFIG.model} não está disponível nesta chave.`};
   }
   if (isTimeoutError(error) || message.includes('tempo limite')) {
-    return {status: 504, message: 'O Claude demorou demais para responder. Tente gerar o diagnóstico novamente.'};
+    return {status: 504, message: `O ${name} demorou demais para responder. Tente gerar o diagnóstico novamente.`};
   }
   if (status === 400) {
-    return {status: 400, message: 'O Claude recusou o pedido. Confira a chave, o modelo e tente de novo sem anexos pesados.'};
+    return {status: 400, message: `O ${name} recusou o pedido. Confira a chave, o modelo e tente de novo sem anexos pesados.`};
   }
-  return {status: status >= 400 && status < 600 ? status : 500, message: message || 'Falha não tratada ao consultar o Claude.'};
+  return {status: status >= 400 && status < 600 ? status : 500, message: message || `Falha não tratada ao consultar o ${name}.`};
 }
 
-function textFromMessage(message: Anthropic.Message): string {
-  return message.content
-    .filter((block): block is Anthropic.TextBlock => block.type === 'text')
-    .map((block) => block.text)
-    .join('\n')
-    .trim();
+function createClient(env: EnvMap): GoogleGenAI {
+  const apiKey = readApiKey(env);
+  if (!apiKey) {
+    throw new Error('GEMINI_API_KEY não configurada no .env.');
+  }
+  return new GoogleGenAI({apiKey});
 }
 
-function examBlock(exam: {data: string; mimeType: string}): Anthropic.ContentBlockParam {
+function examPart(exam: {data: string; mimeType: string}): {inlineData: {mimeType: string; data: string}} {
   const data = stripBase64(exam.data);
   const mimeType = exam.mimeType || 'image/jpeg';
-  if (mimeType === 'application/pdf') {
-    return {
-      type: 'document',
-      source: {type: 'base64', media_type: 'application/pdf', data},
-    };
-  }
-  const mediaType = (['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(mimeType)
-    ? mimeType
-    : 'image/jpeg') as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
-  return {
-    type: 'image',
-    source: {type: 'base64', media_type: mediaType, data},
-  };
+  return {inlineData: {mimeType, data}};
 }
 
-const CLAUDE_REQUEST_TIMEOUT_MS = 240_000;
-
-function createClient(env: EnvMap): Anthropic {
-  const apiKey = readClaudeKey(env);
-  if (!apiKey) {
-    throw new Error('CLAUDE_API_KEY não configurada no .env.');
-  }
-  return new Anthropic({apiKey, timeout: CLAUDE_REQUEST_TIMEOUT_MS, maxRetries: 0});
+function responseText(response: {text?: string}): string {
+  return String(response.text || '').trim();
 }
 
-function modelSupportsEffort(model: string): boolean {
-  return !/haiku/i.test(model);
-}
-
-function buildOutputConfig(withSchema: boolean): {effort?: 'medium'; format?: {type: 'json_schema'; schema: typeof diagnosisOutputSchema}} | undefined {
-  const supportsEffort = modelSupportsEffort(CLAUDE_MODEL);
-  if (withSchema) {
-    return {
-      ...(supportsEffort ? {effort: 'medium' as const} : {}),
-      format: {type: 'json_schema', schema: diagnosisOutputSchema},
-    };
-  }
-  return supportsEffort ? {effort: 'medium'} : undefined;
-}
-
-function isStructuredOutputRejected(error: unknown): boolean {
-  if (isTimeoutError(error)) return false;
-  const message = error instanceof Error ? error.message : String(error);
-  return message.includes('output_config')
-    || message.includes('json_schema')
-    || message.includes('structured outputs')
-    || message.includes('effort parameter');
-}
-
-async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`O Claude excedeu o tempo limite de ${Math.round(ms / 1000)}s.`)), ms);
-  });
-  try {
-    return await Promise.race([promise, timeout]);
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
-}
-
-async function createAdviceMessage(
-  client: Anthropic,
+async function generateText(
+  env: EnvMap,
   systemInstruction: string,
-  content: Anthropic.ContentBlockParam[],
-  withSchema: boolean
-): Promise<Anthropic.Message> {
-  const outputConfig = buildOutputConfig(withSchema);
-  return withTimeout(client.messages.create({
-    model: CLAUDE_MODEL,
-    max_tokens: 16384,
-    system: systemInstruction,
-    messages: [{role: 'user', content}],
-    ...(outputConfig ? {output_config: outputConfig} : {}),
-  }), CLAUDE_REQUEST_TIMEOUT_MS);
+  parts: Array<{text: string} | {inlineData: {mimeType: string; data: string}}>,
+  withSchema: boolean,
+): Promise<string> {
+  const client = createClient(env);
+  const response = await client.models.generateContent({
+    model: AI_CONFIG.model,
+    contents: [{role: 'user', parts}],
+    config: {
+      systemInstruction,
+      temperature: AI_CONFIG.temperature,
+      topP: AI_CONFIG.topP,
+      maxOutputTokens: AI_CONFIG.maxOutputTokens,
+      responseMimeType: 'application/json',
+      ...(withSchema ? {responseSchema: diagnosisOutputSchema} : {}),
+    },
+  });
+  return responseText(response);
 }
 
 async function handleAdvice(req: IncomingMessage, res: ServerResponse, env: EnvMap): Promise<void> {
@@ -256,63 +213,74 @@ async function handleAdvice(req: IncomingMessage, res: ServerResponse, env: EnvM
     return;
   }
 
-  const client = createClient(env);
-  const content: Anthropic.ContentBlockParam[] = [
-    ...exams.slice(0, 8).map(examBlock),
-    {type: 'text', text: userPrompt},
+  const parts = [
+    ...exams.slice(0, 8).map(examPart),
+    {text: userPrompt},
   ];
 
-  let message: Anthropic.Message;
+  let text = '';
   try {
-    message = await createAdviceMessage(client, systemInstruction, content, true);
+    text = await generateText(env, systemInstruction, parts, true);
   } catch (error) {
-    if (!isStructuredOutputRejected(error)) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!message.includes('responseSchema') && !message.includes('response_schema')) {
       throw error;
     }
-    message = await createAdviceMessage(client, systemInstruction, content, false);
+    text = await generateText(env, systemInstruction, parts, false);
   }
 
-  const text = textFromMessage(message);
   if (!text) {
-    sendJson(res, 502, {error: 'O Claude não devolveu texto no diagnóstico.'});
+    sendJson(res, 502, {error: `${AI_CONFIG.displayName} não devolveu texto no diagnóstico.`});
     return;
   }
   sendJson(res, 200, {text});
 }
 
-async function handleTranscribe(_req: IncomingMessage, res: ServerResponse, _env: EnvMap): Promise<void> {
-  sendJson(res, 422, {
-    error: 'O Claude Sonnet 5.5 não transcreve áudio neste fluxo. Digite os sintomas ou anexe exame em imagem/PDF.',
-  });
+async function handleTranscribe(req: IncomingMessage, res: ServerResponse, env: EnvMap): Promise<void> {
+  const body = await readJsonBody(req);
+  const audioBase64 = typeof body.audioBase64 === 'string' ? body.audioBase64 : '';
+  const mimeType = typeof body.mimeType === 'string' ? body.mimeType : 'audio/webm';
+  if (!audioBase64) {
+    sendJson(res, 400, {error: 'Áudio não enviado.'});
+    return;
+  }
+
+  const text = await generateText(
+    env,
+    'Transcreva o áudio em português do Brasil. Devolva JSON {"text":"..."}.',
+    [{inlineData: {mimeType, data: stripBase64(audioBase64)}}, {text: 'Transcreva este áudio.'}],
+    false,
+  );
+  sendJson(res, 200, {text});
 }
 
-function attachClaudeRoutes(server: ViteDevServer, env: EnvMap): void {
+function attachAiRoutes(server: ViteDevServer, env: EnvMap): void {
   server.middlewares.use(async (req, res, next) => {
     const path = requestPath(req);
-    if (req.method !== 'POST' || (path !== '/api/claude/advice' && path !== '/api/claude/transcribe')) {
+    if (req.method !== 'POST' || (path !== AI_CONFIG.routes.advice && path !== AI_CONFIG.routes.transcribe)) {
       next();
       return;
     }
 
-    req.setTimeout(CLAUDE_REQUEST_TIMEOUT_MS + 5_000);
-    res.setTimeout(CLAUDE_REQUEST_TIMEOUT_MS + 5_000);
+    req.setTimeout(AI_CONFIG.timeoutMs + 5_000);
+    res.setTimeout(AI_CONFIG.timeoutMs + 5_000);
 
     try {
-      if (path === '/api/claude/advice') {
+      if (path === AI_CONFIG.routes.advice) {
         await handleAdvice(req, res, env);
         return;
       }
       await handleTranscribe(req, res, env);
     } catch (error) {
-      const mapped = mapClaudeError(error);
-      console.error('Claude API error:', mapped.message, error instanceof Error ? error.message : error);
+      const mapped = mapAiError(error);
+      console.error('AI API error:', mapped.message, error instanceof Error ? error.message : error);
       try {
         sendJson(res, mapped.status, {error: mapped.message});
       } catch (sendError) {
-        console.error('Falha ao devolver erro do Claude:', sendError);
+        console.error('Falha ao devolver erro da IA:', sendError);
         if (!res.writableEnded) {
           res.statusCode = 500;
-          res.end(JSON.stringify({error: 'Falha não tratada ao consultar o Claude.'}));
+          res.end(JSON.stringify({error: `Falha não tratada ao consultar o ${AI_CONFIG.displayName}.`}));
         }
       }
     }
@@ -327,7 +295,7 @@ function relaxHttpTimeouts(server: ViteDevServer): void {
       requestTimeout?: number;
     }) | null;
     if (!httpServer) return;
-    const wait = CLAUDE_REQUEST_TIMEOUT_MS + 30_000;
+    const wait = AI_CONFIG.timeoutMs + 30_000;
     httpServer.timeout = wait;
     httpServer.headersTimeout = wait;
     httpServer.requestTimeout = wait;
@@ -336,17 +304,17 @@ function relaxHttpTimeouts(server: ViteDevServer): void {
   server.httpServer?.once('listening', apply);
 }
 
-export function claudePlugin(env: EnvMap): Plugin {
+export function aiPlugin(env: EnvMap): Plugin {
   return {
-    name: 'vet-claude-api',
+    name: 'vet-ai-api',
     configureServer(server) {
       relaxHttpTimeouts(server);
-      attachClaudeRoutes(server, env);
+      attachAiRoutes(server, env);
     },
     configurePreviewServer(server) {
       const preview = server as unknown as ViteDevServer;
       relaxHttpTimeouts(preview);
-      attachClaudeRoutes(preview, env);
+      attachAiRoutes(preview, env);
     },
   };
 }

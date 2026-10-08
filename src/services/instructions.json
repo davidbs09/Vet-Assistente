@@ -12,10 +12,10 @@
      },
      "model_parameters": {
           "recommended_reasoning_models": [
-               "claude-sonnet-5"
+               "gemini-3.5-flash-lite"
           ],
           "recommended_multimodal_audio_models": [
-               "claude-sonnet-5"
+               "gemini-3.5-flash-lite"
           ],
           "temperature": 0.2,
           "top_p": 0.6,
@@ -257,8 +257,8 @@
                "Content-Type": "application/json"
           },
           "gemini_sdk_usage": {
-               "nodejs_example": "const response = await ai.models.generateContent({ model: 'gemini-2.5-pro', contents: { parts: [{ text: userPrompt }] }, config: { systemInstruction: systemInstructionText, responseMimeType: 'application/json', responseSchema: jsonOutputSchema } });",
-               "python_example": "response = client.models.generate_content(model='gemini-2.5-pro', contents=user_prompt, config=types.GenerateContentConfig(system_instruction=system_instruction_text, response_mime_type='application/json', response_schema=json_output_schema))"
+               "nodejs_example": "const response = await ai.models.generateContent({ model: 'gemini-3.5-flash-lite', contents: { parts: [{ text: userPrompt }] }, config: { systemInstruction: systemInstructionText, responseMimeType: 'application/json', responseSchema: jsonOutputSchema } });",
+               "python_example": "response = client.models.generate_content(model='gemini-3.5-flash-lite', contents=user_prompt, config=types.GenerateContentConfig(system_instruction=system_instruction_text, response_mime_type='application/json', response_schema=json_output_schema))"
           }
      }
 }
