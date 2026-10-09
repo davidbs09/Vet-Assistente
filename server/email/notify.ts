@@ -1,3 +1,4 @@
+import {formatPhone} from '../../src/lib/phone';
 import {PASSWORD_EXAMPLE, PASSWORD_REQUIREMENTS} from '../../src/shared/passwordPolicy';
 import {
   adminNotifyEmail,
@@ -11,7 +12,12 @@ type Person = {
   email?: string;
   displayName?: string;
   crmv?: string;
+  contato?: string;
 };
+
+function personContato(person: Person): string {
+  return formatPhone(person.contato || '') || person.contato || '';
+}
 
 function escapeHtml(value: string): string {
   return value
@@ -117,6 +123,7 @@ export async function notifyAdminAccessRequested(env: EnvMap, person: Person): P
       ${field('Nome completo', name)}
       ${field('E-mail', person.email)}
       ${field('CRMV', person.crmv)}
+      ${field('Contato', personContato(person))}
     </table>
     <p style="margin:20px 0 0;font-size:14px;line-height:1.6;color:#334155;">Use o CRMV para confirmar a identidade no conselho regional. A senha cadastrada pelo cliente não é enviada neste e-mail.</p>
     ${cta(appUrl, 'Abrir o painel de acessos')}`
@@ -138,6 +145,7 @@ export async function notifyAdminPasswordResetRequested(env: EnvMap, person: Per
       ${field('Nome', name)}
       ${field('E-mail', person.email)}
       ${field('CRMV', person.crmv)}
+      ${field('Contato', personContato(person))}
     </table>
     <p style="margin:20px 0 0;font-size:14px;line-height:1.6;color:#334155;">Confirme o e-mail no painel de acessos e execute o reset. O cliente só recebe as instruções depois que você concluir essa etapa.</p>
     ${cta(appUrl, 'Abrir o painel de acessos')}`

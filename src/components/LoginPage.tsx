@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { AlertCircle, CheckCircle2, Eye, EyeOff, Loader2, Lock, Stethoscope, ShieldCheck } from 'lucide-react';
 import fundoLogin from '../source/fundo-login.png';
+import { formatPhone, isValidPhone, normalizePhone } from '../lib/phone';
 import { validateLoginIdentifier, validateNewPassword } from '../services/authService';
 import { PASSWORD_POLICY_MESSAGE } from '../shared/passwordPolicy';
 import AccessTermsModal from './auth/AccessTermsModal';
@@ -12,6 +13,7 @@ export interface RegisterFormValues {
   displayName: string;
   email: string;
   crmv: string;
+  contato: string;
   password: string;
 }
 
@@ -94,6 +96,7 @@ export default function LoginPage({
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [crmv, setCrmv] = useState('');
+  const [contato, setContato] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [forgotSent, setForgotSent] = useState(false);
@@ -138,6 +141,7 @@ export default function LoginPage({
         displayName: displayName.trim(),
         email: email.trim(),
         crmv: crmv.trim(),
+        contato: normalizePhone(contato),
         password,
       });
       resetForm();
@@ -202,12 +206,16 @@ export default function LoginPage({
   const handleRegisterSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setFormError(null);
-    if (!displayName.trim() || !email.trim() || !crmv.trim() || !password) {
-      setFormError('Preencha nome, e-mail, CRMV e senha para solicitar o acesso.');
+    if (!displayName.trim() || !email.trim() || !crmv.trim() || !contato.trim() || !password) {
+      setFormError('Preencha nome, e-mail, CRMV, contato e senha para solicitar o acesso.');
       return;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       setFormError('Informe um e-mail válido.');
+      return;
+    }
+    if (!isValidPhone(contato)) {
+      setFormError('Informe o contato com DDD e número. Ex: (11) 96464-6464');
       return;
     }
     const passwordError = validateNewPassword(password, confirmPassword);
@@ -458,6 +466,24 @@ export default function LoginPage({
                       required
                     />
                   </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-slate-600" htmlFor="register-contato">Contato</label>
+                  <input
+                    id="register-contato"
+                    type="tel"
+                    inputMode="numeric"
+                    autoComplete="tel"
+                    className={inputClass}
+                    value={contato}
+                    onChange={(e) => setContato(formatPhone(e.target.value))}
+                    disabled={submitting}
+                    maxLength={15}
+                    minLength={14}
+                    pattern="\(\d{2}\) \d{4,5}-\d{4}"
+                    placeholder="(00) 00000-0000"
+                    required
+                  />
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <PasswordField

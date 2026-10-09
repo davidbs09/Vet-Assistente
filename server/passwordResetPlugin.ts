@@ -6,6 +6,7 @@ import {getAuth} from 'firebase-admin/auth';
 import {FieldValue, getFirestore} from 'firebase-admin/firestore';
 import type {Plugin, ViteDevServer} from 'vite';
 import {adminNotifyEmail, sendBrevoEmail, type SendResult} from './email/brevoClient';
+import {isValidPhone, normalizePhone} from '../src/lib/phone';
 import {
   notifyAdminAccessRequested,
   notifyAdminPasswordResetRequested,
@@ -142,6 +143,7 @@ async function handleRequestAccess(req: IncomingMessage, res: ServerResponse, en
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
   const displayName = typeof body.displayName === 'string' ? body.displayName.trim() : '';
   const crmv = typeof body.crmv === 'string' ? body.crmv.trim() : '';
+  const contato = normalizePhone(typeof body.contato === 'string' ? body.contato : '');
   const passwordError = validateNewPassword(body.password);
   const adminEmail = String(env.VITE_ADMIN_EMAIL || 'admin@vetassistente.local').trim().toLowerCase();
 
@@ -155,6 +157,10 @@ async function handleRequestAccess(req: IncomingMessage, res: ServerResponse, en
   }
   if (!crmv) {
     sendJson(res, 400, {error: 'Informe o CRMV para solicitar o acesso.'});
+    return;
+  }
+  if (!isValidPhone(contato)) {
+    sendJson(res, 400, {error: 'Informe o contato com DDD e número. Ex: (11) 96464-6464'});
     return;
   }
   if (passwordError) {
@@ -193,6 +199,7 @@ async function handleRequestAccess(req: IncomingMessage, res: ServerResponse, en
         email,
         displayName: String(existing.displayName || displayName),
         crmv: String(existing.crmv || crmv),
+        contato: String(existing.contato || contato),
       });
     }
     sendJson(res, 409, {
@@ -215,6 +222,7 @@ async function handleRequestAccess(req: IncomingMessage, res: ServerResponse, en
     email,
     displayName,
     crmv,
+    contato,
     role: 'user',
     status: 'pending',
     mustResetPassword: false,
@@ -222,7 +230,7 @@ async function handleRequestAccess(req: IncomingMessage, res: ServerResponse, en
     createdAt: FieldValue.serverTimestamp(),
   });
 
-  await notifyAdminAccessRequested(env, {email, displayName, crmv});
+  await notifyAdminAccessRequested(env, {email, displayName, crmv, contato});
   sendJson(res, 200, {ok: true});
 }
 
@@ -352,6 +360,7 @@ async function handleRequestReset(req: IncomingMessage, res: ServerResponse, env
     email,
     displayName: String(profile.displayName || ''),
     crmv: String(profile.crmv || ''),
+    contato: String(profile.contato || ''),
   });
   sendJson(res, 200, {ok: true});
 }

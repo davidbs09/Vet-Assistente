@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { KeyRound, Loader2, ShieldCheck, UserCheck, UserX, X } from 'lucide-react';
+import { formatPhone } from '../lib/phone';
 import {
   activateUser,
   AdminActionResult,
@@ -178,13 +179,14 @@ function AdminUsersPage({ currentUserId }: AdminUsersPageProps) {
           <Loader2 className="h-6 w-6 animate-spin" />
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-4 py-3 font-medium">Veterinário</th>
                 <th className="px-4 py-3 font-medium">E-mail</th>
                 <th className="px-4 py-3 font-medium">CRMV</th>
+                <th className="px-4 py-3 font-medium">Contato</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 font-medium text-right">Ação</th>
               </tr>
@@ -198,6 +200,9 @@ function AdminUsersPage({ currentUserId }: AdminUsersPageProps) {
                     <td className="px-4 py-3 font-medium text-slate-900">{user.displayName}</td>
                     <td className="px-4 py-3 text-slate-600">{user.email}</td>
                     <td className="px-4 py-3 text-slate-500">{user.crmv || '—'}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-slate-600">
+                      {formatPhone(user.contato || '') || user.contato || '—'}
+                    </td>
                     <td className="px-4 py-3">
                       <span className={statusClass(user)}>
                         {user.status === 'active' && !requiresPasswordReset(user) && !requestedPasswordReset(user) ? <ShieldCheck className="h-3.5 w-3.5" /> : null}
@@ -269,7 +274,7 @@ function AdminUsersPage({ currentUserId }: AdminUsersPageProps) {
               })}
               {users.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-10 text-center text-slate-500">
+                  <td colSpan={6} className="px-4 py-10 text-center text-slate-500">
                     Nenhuma solicitação de acesso ainda.
                   </td>
                 </tr>

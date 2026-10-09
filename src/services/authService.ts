@@ -15,6 +15,7 @@ import {
   serverTimestamp,
   User,
 } from '../firebase';
+import { isValidPhone, normalizePhone } from '../lib/phone';
 import { validatePasswordPolicy } from '../shared/passwordPolicy';
 
 export const AUTH_TOKEN_KEY = 'vetai_auth_token';
@@ -41,6 +42,7 @@ export interface UserProfile {
   email: string;
   displayName: string;
   crmv?: string;
+  contato?: string;
   role: UserRole;
   status: UserStatus;
   mustResetPassword?: boolean;
@@ -65,6 +67,7 @@ export interface RegisterPayload {
   password: string;
   displayName: string;
   crmv: string;
+  contato: string;
 }
 
 const env = (import.meta as any).env || {};
@@ -216,7 +219,7 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
 
 export async function ensureUserProfile(
   user: User,
-  extras?: { displayName?: string; crmv?: string }
+  extras?: { displayName?: string; crmv?: string; contato?: string }
 ): Promise<UserProfile> {
   const existing = await getUserProfile(user.uid);
   if (existing) {
@@ -239,6 +242,7 @@ export async function ensureUserProfile(
     email: user.email || extras?.displayName || '',
     displayName: extras?.displayName || user.displayName || user.email || 'Veterinário',
     crmv: extras?.crmv || '',
+    contato: extras?.contato ? normalizePhone(extras.contato) : '',
     role: isAdmin ? 'admin' : 'user',
     status: isAdmin ? 'active' : 'pending',
     mustResetPassword: false,
@@ -437,6 +441,10 @@ export async function registerWithEmail(payload: RegisterPayload): Promise<void>
   if (!payload.crmv.trim()) {
     throw authError('Informe o CRMV para solicitar o acesso.', 'auth/invalid-credential');
   }
+  const contato = normalizePhone(payload.contato);
+  if (!isValidPhone(contato)) {
+    throw authError('Informe o contato com DDD e número. Ex: (11) 96464-6464', 'auth/invalid-credential');
+  }
   const passwordError = validatePasswordPolicy(payload.password);
   if (passwordError) {
     throw authError(passwordError, 'auth/weak-password');
@@ -450,6 +458,7 @@ export async function registerWithEmail(payload: RegisterPayload): Promise<void>
       password: payload.password,
       displayName: payload.displayName.trim(),
       crmv: payload.crmv.trim(),
+      contato,
     }),
   });
 
@@ -476,6 +485,7 @@ export async function registerWithEmail(payload: RegisterPayload): Promise<void>
       await ensureUserProfile(credential.user, {
         displayName: payload.displayName,
         crmv: payload.crmv.trim(),
+        contato,
       });
     } catch (error: unknown) {
       const code = typeof error === 'object' && error && 'code' in error
@@ -518,6 +528,7 @@ async function finishExistingRegister(email: string, payload: RegisterPayload): 
     await ensureUserProfile(currentUser, {
       displayName: payload.displayName,
       crmv: payload.crmv.trim(),
+      contato: normalizePhone(payload.contato),
     });
     return;
   }
