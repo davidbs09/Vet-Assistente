@@ -118,7 +118,6 @@
                     "Dor abdominal / pós-operatório: um opioide de primeira linha da rotina (Tramadol — Cronidor ou equivalente VetSmart/AlfaVet) e, se indicado, Dipirona em gotas como adjuvante e controle térmico. São objetivos distintos (opioide vs analgésico-antipirético). Não use dois opioides nem AINE + corticoide."
                ],
                "prescription_stewardship_rules": [
-                    "REVISÃO RÁPIDA DA LISTA: está demais? tire o que não muda a conduta agora. Está de menos? inclua só o que falta para o problema deste paciente. Cada item trata um problema real desta anamnese? Dois itens fazem a mesma coisa? Fique com um.",
                     "UM FÁRMACO POR PROBLEMA: não prescreva dois ou mais medicamentos com a mesma indicação. Exemplos proibidos: Maropitante + Ondansetrona + Metoclopramida (três antieméticos); dois AINEs; dois antibióticos de espectro sobreposto sem justificativa de combinação sinérgica documentada.",
                     "Antiemese: UM só. Na prescrição prática VO da rotina brasileira, preferir Ondansetrona (Vonau Vet ou equivalente) em comprimido quando o animal puder engolir. Maropitante (Cerenia) injetável fica para a fase hospitalar com vômito incoercível — não coloque os dois. Metoclopramida só se o problema for íleo/esvaziamento gástrico.",
                     "GRAVIDADE → VIA E ANTIBIÓTICO: (1) GRAVÍSSIMO: no treatment descreva injetável hospitalar (fluido IV, êmese ativa). Em medications, mesmo assim use o esquema de PRIMEIRA LINHA mais usado (Amoxicilina+Clavulanato — Synulox / Agemoxi), em comprimido ou líquido, com a observação de iniciar injetável se vômito contínuo. Nunca Ampicilina, Unasyn ou Ampicilina+Sulbactam. (2) MODERADO A GRAVE e (3) MODERADO: o mesmo antibiótico de primeira linha VO. (4) LEVE: via oral, sem antibiótico por garantia, sem injetável.",
@@ -146,11 +145,11 @@
                },
                "treatment": {
                     "type": "string",
-                    "description": "Conduta imediata e plano para descobrir qual hipótese é o problema real. Citações em colchetes [Nelson & Couto]. Sem relatório de UTI."
+                    "description": "Plano clínico: conduta definitiva primeiro (OSH na piometra), depois estabilização. Citações em colchetes [Nelson & Couto]. Cálculo de fluido no texto. Sem relatório de UTI."
                },
                "medications": {
                     "type": "array",
-                    "description": "Prescrição da conduta: cada fármaco do treatment (dor, êmese, fluido, antibiótico, etc.) com dose. Sem limite de 3. Não é um por hipótese. Sem Unasyn. Sem dois soros.",
+                    "description": "Prescrição prática de primeira linha (comp./gotas). Sem Unasyn. Sem dois soros. Amoxi-clav, um antiemético VO, Tramadol ± Dipirona gotas. Fluido no máximo um, de preferência só no treatment.",
                     "items": {
                          "type": "object",
                          "properties": {
@@ -169,24 +168,19 @@
                               "duration": {
                                    "type": "string",
                                    "description": "Tempo total do tratamento (ex: 'Por 10 dias')."
-                              },
-                              "forDiagnosis": {
-                                   "type": "string",
-                                   "description": "Objetivo da conduta (ex.: Controle da dor, Antiemético, Fluidoterapia), não o nome da doença."
                               }
                          },
                          "required": [
                               "name",
                               "dosage",
                               "frequency",
-                              "duration",
-                              "forDiagnosis"
+                              "duration"
                          ]
                     }
                },
                "suggestedExams": {
                     "type": "array",
-                    "description": "Exames que separam as hipóteses. Cada item deve dizer o que confirma ou torna menos provável.",
+                    "description": "Exames complementares recomendados para confirmação diagnóstica.",
                     "items": {
                          "type": "string"
                     }
