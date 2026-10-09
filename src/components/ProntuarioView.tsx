@@ -60,7 +60,7 @@ export default function ProntuarioView({ patient, consultations, onBack }: { pat
               <p>${c.treatment}</p>
               <div class="section-title">Medicamentos</div>
               <ul>
-                ${c.medications.map(m => `<li>${m.name}: ${m.dosage} - ${m.frequency} (${m.duration})</li>`).join('')}
+                ${c.medications.map(m => `<li>${m.name}${m.forDiagnosis ? ` [${m.forDiagnosis}]` : ''}: ${m.dosage} - ${m.frequency} (${m.duration})</li>`).join('')}
               </ul>
             </div>
           `).join('')}
@@ -154,6 +154,7 @@ export default function ProntuarioView({ patient, consultations, onBack }: { pat
                     {c.medications.map((med, j) => (
                       <div key={j} className="rounded-lg bg-slate-50 p-3 text-xs">
                         <div className="font-bold text-slate-900">{med.name}</div>
+                        {med.forDiagnosis && <div className="mt-0.5 text-slate-400">{med.forDiagnosis}</div>}
                         <div className="mt-1 text-slate-500">{med.dosage} • {med.frequency}</div>
                       </div>
                     ))}

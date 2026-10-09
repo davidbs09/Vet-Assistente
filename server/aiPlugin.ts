@@ -20,15 +20,15 @@ const diagnosisOutputSchema = {
     differentials: {
       type: 'array',
       minItems: 3,
-      description: 'No mínimo 3 doenças nomeadas, da mais para a menos provável neste paciente.',
+      description: instructions.json_output_schema.properties.differentials.description,
       items: {
         type: 'object',
         additionalProperties: false,
         required: ['disease', 'likelihood', 'reasoning'],
         properties: {
-          disease: {type: 'string', description: 'Nome da doença ou síndrome.'},
-          likelihood: {type: 'string', description: 'Mais provável, Plausível ou A descartar.'},
-          reasoning: {type: 'string', description: 'Por que esta posição, achados a favor/contra e como diferenciar.'},
+          disease: {type: 'string', description: instructions.json_output_schema.properties.differentials.items.properties.disease.description},
+          likelihood: {type: 'string', description: instructions.json_output_schema.properties.differentials.items.properties.likelihood.description},
+          reasoning: {type: 'string', description: instructions.json_output_schema.properties.differentials.items.properties.reasoning.description},
         },
       },
     },
@@ -42,12 +42,13 @@ const diagnosisOutputSchema = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['name', 'dosage', 'frequency', 'duration'],
+        required: ['name', 'dosage', 'frequency', 'duration', 'forDiagnosis'],
         properties: {
           name: {type: 'string', description: instructions.json_output_schema.properties.medications.items.properties.name.description},
           dosage: {type: 'string', description: instructions.json_output_schema.properties.medications.items.properties.dosage.description},
           frequency: {type: 'string', description: instructions.json_output_schema.properties.medications.items.properties.frequency.description},
           duration: {type: 'string', description: instructions.json_output_schema.properties.medications.items.properties.duration.description},
+          forDiagnosis: {type: 'string', description: instructions.json_output_schema.properties.medications.items.properties.forDiagnosis.description},
         },
       },
     },

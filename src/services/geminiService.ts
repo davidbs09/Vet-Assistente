@@ -16,6 +16,7 @@ export interface DiagnosisResult {
     dosage: string;
     frequency: string;
     duration: string;
+    forDiagnosis?: string;
   }[];
   suggestedExams: string[];
   sources: string[];
@@ -45,13 +46,13 @@ Exames: ${vars.exams_data}
 
 Responda APENAS um JSON válido, sem markdown e sem texto fora do JSON, com estas chaves em string/array plano:
 - diagnosis: string
-- differentials: [{disease, likelihood, reasoning}]
-- treatment: string (markdown)
-- medications: [{name, dosage, frequency, duration}]
-- suggestedExams: [string]
+- differentials: [{disease, likelihood, reasoning}] — likelihood só: "Mais provável" | "Plausível" | "Menos provável". Nunca use "A descartar".
+- treatment: string (markdown) — conduta até a recuperação E o plano para descobrir qual hipótese é a verdadeira. Este campo é o eixo: medications deve copiá-lo na risca.
+- medications: [{name, dosage, frequency, duration, forDiagnosis}] — prescrição da CONDUTA, sem teto de 3 e sem um fármaco por hipótese. Tudo que o treatment pedir vira item com dose. forDiagnosis = objetivo da conduta (ex.: Controle da dor), não o nome da doença.
+- suggestedExams: [string] — cada exame deve dizer qual hipótese confirma ou torna menos provável
 - sources: [string]
 
-Não aninhe diagnosis nem treatment como objeto. Inclua as 7 fontes obrigatórias.`;
+Não aninhe diagnosis nem treatment como objeto. Inclua as 8 fontes obrigatórias.`;
 }
 
 const USE_TEST_SYSTEM_INSTRUCTION = true;
@@ -64,18 +65,19 @@ Sua tarefa é fornecer diagnósticos e tratamentos baseados em evidências, pesq
 3. Manual Merck Veterinário
 4. Casos de Rotina em Medicina Veterinária de Pequenos Animais - Leandro Z. Crivellenti
 5. Manual Saunders - Clínica de Pequenos Animais - Richard Sherding
-6. Vetsmart (para medicações, nomes comerciais e dosagens)
-7. Vetalfa (para medicações, nomes comerciais e dosagens)
+6. Guia Terapêutico Veterinário — Fernando Antônio Bretas Viana, 3ª ed., 2014, Editora CEM (560 p.)
+7. Vetsmart (para medicações, nomes comerciais e dosagens)
+8. Vetalfa (para medicações, nomes comerciais e dosagens)
 
 Para cada consulta, você deve:
 1. Analisar os sintomas e informações do paciente (espécie, raça, peso: ${patientInfo.weight}kg).
 2. Se houver exames (imagens ou PDFs convertidos em texto/imagem), analise-os cuidadosamente.
-3. Fornecer um diagnóstico provável.
-4. Sugerir um tratamento detalhado.
-5. Calcular as doses exatas dos medicamentos com base no peso do paciente (${patientInfo.weight}kg), seguindo estritamente as diretrizes do Vetsmart e Vetalfa.
+3. Fornecer um diagnóstico provável e diferenciais com likelihood "Mais provável", "Plausível" ou "Menos provável". Nunca use "A descartar".
+4. No treatment: conduta até a recuperação e como desvendar qual hipótese é o problema real. O tratamento é o foco principal.
+5. Calcular as doses exatas dos medicamentos com base no peso do paciente (${patientInfo.weight}kg), cruzando Bretas Viana com as diretrizes vigentes do Vetsmart e Vetalfa.
 6. Apresentar as doses em comprimidos ou ml, dependendo do que for mais apropriado para o animal e o medicamento.
-7. Listar os medicamentos com nome, dose, frequência e duração.
-8. Sugerir exames complementares necessários para confirmar ou refinar o diagnóstico.
+7. Em medications, transcreva a farmacologia do treatment. Se a conduta cita dor, êmese, fluido, antibiótico ou outro fármaco, cada um entra na lista. Sem teto de 3 e sem um por hipótese. forDiagnosis = objetivo da conduta. Complete o tratamento primeiro.
+8. Em suggestedExams, liste exames que separem as hipóteses: cada item deve dizer o que confirma ou torna menos provável.
 9. Listar as fontes bibliográficas e sites consultados (incluindo obrigatoriamente as fontes citadas acima).
 
 Responda SEMPRE em formato JSON estruturado com as chaves: diagnosis, differentials, treatment, medications, suggestedExams, sources.`;
@@ -85,7 +87,8 @@ function buildSystemInstruction(patientInfo: { species: string; breed: string; w
   const sources = system_instruction.mandatory_sources
     .map((source, index) => {
       const authors = 'authors' in source && source.authors ? ` — ${source.authors}` : '';
-      return `${index + 1}. ${source.title}${authors}\n   Função: ${source.purpose}`;
+      const edition = 'edition' in source && source.edition ? `, ${source.edition}` : '';
+      return `${index + 1}. ${source.title}${authors}${edition}\n   Função: ${source.purpose}`;
     })
     .join('\n');
 
@@ -99,7 +102,7 @@ ${sources}
 
 CONSULTA ÀS FONTES (como se estivesse lendo)
 ${bullets(system_instruction.clinical_protocols.source_consultation_protocol)}
-O array "sources" DEVE incluir as 7 fontes com o tema consultado (pode acrescentar outras se realmente usadas). Não invente número de página.
+O array "sources" DEVE incluir as ${system_instruction.mandatory_sources.length} fontes com o tema consultado (pode acrescentar outras se realmente usadas). Não invente número de página.
 
 PACIENTE DESTA CONSULTA
 - Espécie: ${speciesLabel(patientInfo.species)}
@@ -129,7 +132,7 @@ ${bullets(system_instruction.clinical_protocols.prescription_stewardship_rules)}
 
 REQUISITOS DE SAÍDA
 ${bullets(system_instruction.output_requirements)}
-- O campo "differentials" deve conter NO MÍNIMO 3 doenças distintas (não sinônimos da mesma entidade), da mais para a menos provável, com likelihood ("Mais provável" | "Plausível" | "A descartar") e raciocínio que justifique a POSIÇÃO de cada uma.
+- O campo "differentials" deve conter NO MÍNIMO 3 doenças distintas (não sinônimos da mesma entidade), da mais para a menos provável, com likelihood ("Mais provável" | "Plausível" | "Menos provável") e raciocínio que justifique a POSIÇÃO de cada uma. Nunca use "A descartar".
 
 Responda SEMPRE em JSON válido no schema pedido.`;
 }
@@ -185,9 +188,14 @@ function extractFrequency(text: string): string {
 function likelihoodFromPosition(position: unknown): string {
   const n = Number(position);
   if (n === 1) return "Mais provável";
-  if (n === 2 || n === 3) return "Plausível";
-  if (n >= 4) return "A descartar";
+  if (n === 2) return "Plausível";
+  if (n >= 3) return "Menos provável";
   return "";
+}
+
+function normalizeLikelihood(value: string): string {
+  if (/descart/i.test(value)) return "Menos provável";
+  return value;
 }
 
 function flattenDiagnosis(value: unknown): string {
@@ -322,6 +330,7 @@ function normalizeMedication(item: unknown): DiagnosisResult["medications"][numb
     dosage: dosage || "Não informado",
     frequency: frequency || "Conforme orientação",
     duration: duration || "Conforme reavaliação",
+    forDiagnosis: pickText(record, ["forDiagnosis", "indication", "objetivo"]) || undefined,
   };
 }
 
@@ -329,7 +338,7 @@ function normalizeDifferential(item: unknown): DifferentialDiagnosis {
   const record = item && typeof item === "object" ? item as Record<string, unknown> : {};
   return {
     disease: pickText(record, ["disease", "doenca", "name"], "Hipótese não nomeada"),
-    likelihood: pickText(record, ["likelihood"]) || likelihoodFromPosition(record.posicao) || "Plausível",
+    likelihood: normalizeLikelihood(pickText(record, ["likelihood"]) || likelihoodFromPosition(record.posicao) || "Plausível"),
     reasoning: pickText(record, ["reasoning", "justificativa"]),
   };
 }

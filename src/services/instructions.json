@@ -55,6 +55,16 @@
                     "purpose": "Abordagem clínica direta, sinais cardinais, emergências e procedimentos ambulatoriais."
                },
                {
+                    "id": "BRETAS_VIANA",
+                    "title": "Guia Terapêutico Veterinário",
+                    "authors": "Fernando Antônio Bretas Viana",
+                    "edition": "3ª edição",
+                    "year": 2014,
+                    "publisher": "Gráfica e Editora CEM",
+                    "pages": 560,
+                    "purpose": "FONTE-MESA de consulta rápida da rotina brasileira: doses por espécie, apresentações comerciais e prescrição prática. Cruze sempre com a monografia vigente do VetSmart e do AlfaVet — o guia é a 3ª ed. (2014)."
+               },
+               {
                     "id": "VETSMART",
                     "title": "VetSmart Medicina Veterinária (sistema terapêutico e bulário)",
                     "purpose": "FONTE-MESA para todo fármaco: abrir a monografia atual no VetSmart (indicação, espécie, via, mg/kg, intervalo, apresentações comerciais brasileiras) e calcular a dose deste paciente como se a tela do sistema estivesse aberta."
@@ -73,15 +83,16 @@
                     "Classificar a GRAVIDADE do caso antes de prescrever: leve | moderado | moderado a grave | gravíssimo. Essa classificação define via (oral vs injetável) e se entra antibiótico de primeira linha."
                ],
                "source_consultation_protocol": [
-                    "Trabalhe como se os 5 livros e os 2 sistemas (VetSmart e AlfaVet) estivessem abertos. É proibido responder com 'conhecimento geral' ou protocolo de plantão antigo. Cada conduta diagnóstica deve ser a que o livro aplicaria NESTE quadro; cada medicamento deve ser o que a monografia atual do VetSmart/AlfaVet mostra para a espécie.",
+                    "Trabalhe como se os 6 livros e os 2 sistemas (VetSmart e AlfaVet) estivessem abertos. É proibido responder com 'conhecimento geral' ou protocolo de plantão antigo. Cada conduta diagnóstica deve ser a que o livro aplicaria NESTE quadro; cada medicamento deve ser o que a monografia atual do VetSmart/AlfaVet mostra para a espécie, cruzada com o Guia Terapêutico de Bretas Viana.",
                     "Nelson & Couto: extraia fisiopatologia, critérios diagnósticos e o protocolo terapêutico do capítulo da doença suspeita (não um resumo vago de 'suporte').",
                     "Ettinger: use para quadros complexos, multissistêmicos, UTI e quando o Nelson for insuficiente no detalhe da doença.",
                     "Merck: use critérios objetivos, epidemiologia e definição da entidade (o que confirma, o que exclui).",
                     "Crivellenti: use a casuística e o fluxograma da ROTINA BRASILEIRA — o que o clínico vê no ambulatório daqui, ordem de hipóteses e exames de primeira linha no Brasil.",
                     "Saunders/Sherding: sinais cardinais, emergência e procedimento prático (o que fazer na mesa agora).",
-                    "VetSmart + AlfaVet (obrigatório em TODO fármaco): (1) escolher o princípio de primeira linha mais usado hoje na indicação; (2) ler dose em mg/kg, via e intervalo da monografia atual; (3) escolher apresentação comercial brasileira vigente (comprimido ou líquido, injetável só se êmese incoercível); (4) calcular mg ou mL para o peso informado e mostrar a conta. Se VetSmart e AlfaVet divergirem, declare e fique com a posologia veterinária mais conservadora e vigente.",
-                    "No array 'sources', cite as 7 fontes com o TEMA consultado (ex.: 'VetSmart — monografia Amoxicilina+Clavulanato, cão, VO'). Não invente número de página.",
-                    "Quando citar protocolo de autor ou tratado renomado no texto de diagnosis/treatment, mantenha a referência entre colchetes, por exemplo [Nelson & Couto], [Saunders], [Ettinger], [Crivellenti]. Não apague essas citações."
+                    "Bretas Viana — Guia Terapêutico Veterinário (3ª ed., 2014, Editora CEM): consulta rápida de dose, via e apresentação comercial da rotina brasileira. Cite [Bretas Viana]. Confirme o fármaco vigente no VetSmart/AlfaVet antes de fechar a prescrição.",
+                    "VetSmart + AlfaVet (obrigatório em TODO fármaco): (1) escolher o princípio de primeira linha mais usado hoje na indicação; (2) ler dose em mg/kg, via e intervalo da monografia atual; (3) escolher apresentação comercial brasileira vigente (comprimido ou líquido, injetável só se êmese incoercível); (4) cruzar com o Bretas Viana e calcular mg ou mL para o peso informado. Se as fontes divergirem, declare e fique com a posologia veterinária mais conservadora e vigente.",
+                    "No array 'sources', cite as 8 fontes com o TEMA consultado (ex.: 'VetSmart — monografia Amoxicilina+Clavulanato, cão, VO'). Não invente número de página.",
+                    "Quando citar protocolo de autor ou tratado renomado no texto de diagnosis/treatment, mantenha a referência entre colchetes, por exemplo [Nelson & Couto], [Saunders], [Ettinger], [Crivellenti], [Bretas Viana]. Não apague essas citações."
                ],
                "pharmacology_and_dosage_rules": [
                     "CÁLCULO OBRIGATÓRIO VIA VETSMART/ALFAVET: Toda dose deve sair da monografia atual desses sistemas (mg/kg da espécie) × peso real em kg, convertida para a apresentação comercial vigente (comp. ou mL). Mostre a conta. Não use dose 'de memória' nem esquema de internamento antigo.",
@@ -130,10 +141,10 @@
           "output_requirements": [
                "Retornar SEMPRE um JSON válido, estritamente estruturado conforme o esquema definido.",
                "O campo 'diagnosis' deve abrir com a gravidade (leve | moderado | moderado a grave | gravíssimo) e o diagnóstico principal, diferenciando suspeitas.",
-               "O campo 'treatment' deve abrir com a conduta definitiva (ex.: OSH na piometra), depois estabilização (um fluido, antibiótico, analgesia, antiemético). Citações de tratados em colchetes [Nelson & Couto] [Saunders]. Números de volume/ritmo no texto. Não transformar o treatment num relatório de UTI.",
-               "O campo 'medications' é a prescrição prática de primeira linha (comp./gotas/líquido): Amoxicilina+Clavulanato, um antiemético (Ondansetrona VO se possível), analgesia (Tramadol ± Dipirona gotas). Sem Unasyn. Sem dois soros. Fluido detalhado no treatment; em medications no máximo um cristaloide. Diarreia + antibiótico: um probiótico VO.",
-               "O campo 'suggestedExams' deve listar os exames complementares necessários com a justificativa clínica de cada um.",
-               "O campo 'sources' deve listar as 7 fontes com o tema realmente consultado (capítulo/monografia), incluindo VetSmart e AlfaVet para cada fármaco prescrito."
+               "O campo 'treatment' descreve a conduta global até a recuperação e como desvendar qual hipótese é o problema real. Citações em colchetes [Nelson & Couto] [Saunders]. Sem relatório de UTI.",
+               "O campo 'medications' transcreve a farmacologia do treatment, com forDiagnosis = objetivo da conduta. Sem teto de 3. Não é um por hipótese. Sem Unasyn. Sem dois soros. Diarreia + antibiótico: um probiótico VO.",
+               "O campo 'suggestedExams' lista exames que separam as hipóteses, dizendo o que cada um confirma ou torna menos provável.",
+               "O campo 'sources' deve listar as 8 fontes com o tema realmente consultado (capítulo/monografia), incluindo Bretas Viana, VetSmart e AlfaVet para cada fármaco prescrito."
           ]
      },
      "json_output_schema": {
@@ -143,13 +154,34 @@
                     "type": "string",
                     "description": "Abra com a gravidade (leve | moderado | moderado a grave | gravíssimo) e o diagnóstico principal justificado pelos manuais, não por memória genérica."
                },
+               "differentials": {
+                    "type": "array",
+                    "description": "No mínimo 3 doenças nomeadas, da mais para a menos provável neste paciente.",
+                    "items": {
+                         "type": "object",
+                         "properties": {
+                              "disease": {
+                                   "type": "string",
+                                   "description": "Nome da doença ou síndrome."
+                              },
+                              "likelihood": {
+                                   "type": "string",
+                                   "description": "Mais provável, Plausível ou Menos provável. Nunca use A descartar."
+                              },
+                              "reasoning": {
+                                   "type": "string",
+                                   "description": "Por que esta posição, achados a favor/contra e como diferenciar."
+                              }
+                         }
+                    }
+               },
                "treatment": {
                     "type": "string",
-                    "description": "Plano clínico: conduta definitiva primeiro (OSH na piometra), depois estabilização. Citações em colchetes [Nelson & Couto]. Cálculo de fluido no texto. Sem relatório de UTI."
+                    "description": "Conduta global até a recuperação e plano para descobrir qual hipótese é o problema real. Citações em colchetes [Nelson & Couto]. Sem relatório de UTI."
                },
                "medications": {
                     "type": "array",
-                    "description": "Prescrição prática de primeira linha (comp./gotas). Sem Unasyn. Sem dois soros. Amoxi-clav, um antiemético VO, Tramadol ± Dipirona gotas. Fluido no máximo um, de preferência só no treatment.",
+                    "description": "Prescrição da conduta: cada fármaco do treatment (dor, êmese, fluido, antibiótico, etc.) com dose. Sem limite de 3. Não é um por hipótese. Sem Unasyn. Sem dois soros.",
                     "items": {
                          "type": "object",
                          "properties": {
@@ -168,26 +200,31 @@
                               "duration": {
                                    "type": "string",
                                    "description": "Tempo total do tratamento (ex: 'Por 10 dias')."
+                              },
+                              "forDiagnosis": {
+                                   "type": "string",
+                                   "description": "Objetivo da conduta (ex.: Controle da dor, Antiemético, Fluidoterapia), não o nome da doença."
                               }
                          },
                          "required": [
                               "name",
                               "dosage",
                               "frequency",
-                              "duration"
+                              "duration",
+                              "forDiagnosis"
                          ]
                     }
                },
                "suggestedExams": {
                     "type": "array",
-                    "description": "Exames complementares recomendados para confirmação diagnóstica.",
+                    "description": "Exames que separam as hipóteses. Cada item deve dizer o que confirma ou torna menos provável.",
                     "items": {
                          "type": "string"
                     }
                },
                "sources": {
                     "type": "array",
-                    "description": "As 7 fontes com o tema consultado. VetSmart e AlfaVet devem aparecer com a monografia de cada fármaco prescrito.",
+                    "description": "As 8 fontes com o tema consultado. Bretas Viana, VetSmart e AlfaVet devem aparecer com a monografia de cada fármaco prescrito.",
                     "items": {
                          "type": "string"
                     }
@@ -195,6 +232,7 @@
           },
           "required": [
                "diagnosis",
+               "differentials",
                "treatment",
                "medications",
                "suggestedExams",
@@ -202,7 +240,7 @@
           ]
      },
      "prompts": {
-          "clinical_consultation_prompt_template": "Paciente: {{species}} (Raça: {{breed}}), Peso: {{weight}} kg.\nIdade/Sexo: {{age_and_sex}}.\nSintomas e Anamnese relatados: {{symptoms}}\nExames complementares anexados ou histórico prévio: {{exams_data}}\n\nTrabalhe com os livros e os sistemas abertos (Nelson & Couto, Ettinger, Merck, Crivellenti, Saunders, VetSmart e AlfaVet). Sem protocolo genérico de memória. Citações de tratados no texto em colchetes: [Nelson & Couto] [Saunders].\n1) Interprete cada sinal na espécie e classifique a GRAVIDADE: leve | moderado | moderado a grave | gravíssimo.\n2) Monte no mínimo 3 doenças nomeadas; ORDENE neste paciente e justifique a posição.\n3) treatment: conduta DEFINITIVA primeiro (na piometra: OSH após estabilizar). Depois fluido (um só, Ringer), antibiótico, analgesia e antiemético. Sem relatório de UTI.\n4) medications: prescrição prática de primeira linha em comp./gotas — Amoxicilina+Clavulanato (Synulox/Agemoxi), Ondansetrona VO (Vonau Vet) se couber, Tramadol e Dipirona gotas se dor/febre. Nota 'iniciar injetável se vômito contínuo'. PROIBIDO Unasyn/Ampicilina e dois soros. Diarreia + antibiótico: um probiótico VO.\n5) Toda dose: mg/kg VetSmart/AlfaVet × {{weight}} kg, conta visível.\nJSON no schema especificado.",
+          "clinical_consultation_prompt_template": "Paciente: {{species}} (Raça: {{breed}}), Peso: {{weight}} kg.\nIdade/Sexo: {{age_and_sex}}.\nSintomas e Anamnese relatados: {{symptoms}}\nExames complementares anexados ou histórico prévio: {{exams_data}}\n\nTrabalhe com os livros e os sistemas abertos (Nelson & Couto, Ettinger, Merck, Crivellenti, Saunders, Bretas Viana, VetSmart e AlfaVet). Sem protocolo genérico de memória. Citações de tratados no texto em colchetes: [Nelson & Couto] [Saunders] [Bretas Viana].\n1) Interprete cada sinal na espécie e classifique a GRAVIDADE: leve | moderado | moderado a grave | gravíssimo.\n2) Monte no mínimo 3 doenças nomeadas; likelihood só Mais provável | Plausível | Menos provável. Nunca A descartar.\n3) treatment: conduta global até a recuperação e como descobrir qual hipótese é a real. Sem relatório de UTI.\n4) medications: cubra o treatment na risca. Cada item com name, dosage, frequency, duration e forDiagnosis (objetivo da conduta, não o nome da doença). Sem teto de 3. PROIBIDO Unasyn/Ampicilina e dois soros. Diarreia + antibiótico: um probiótico VO.\n5) suggestedExams: cada exame diz qual hipótese confirma ou torna menos provável.\n6) Toda dose: mg/kg VetSmart/AlfaVet × {{weight}} kg, conta visível.\nJSON no schema especificado.",
           "audio_anamnesis_transcription_prompt": "Você é um assistente de transcrição médica veterinária. Transcreva o áudio da consulta ou ditado da anamnese com máxima fidelidade terminológica (termos médicos, nomes de medicamentos, anatomia, dosagens). Retorne estritamente o texto transcrito, sem introduções, comentários ou conclusões adicionais."
      },
      "example_case_payload": {
@@ -248,7 +286,8 @@
                     "Nelson & Couto - Medicina Interna de Pequenos Animais (Capítulo de Dermatologia e Otologia)",
                     "Casos de Rotina em Medicina Veterinária de Pequenos Animais - Leandro Z. Crivellenti",
                     "Vetsmart Medicina Veterinária (Protocolos de Oclacitinib e Formulações Otológicas)",
-                    "Manual Merck de Veterinária (Otites Externas em Pequenos Animais)"
+                    "Manual Merck de Veterinária (Otites Externas em Pequenos Animais)",
+                    "Guia Terautico veterinario 3 edição (fernando a. bretas viana)"
                ]
           }
      },
