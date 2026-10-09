@@ -5,8 +5,29 @@ import type { Patient } from '../../types/clinical';
 import { Button, Input } from '../ui';
 import { formatPatientPhone } from './patientForm';
 
+const selectClass = 'flex h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500';
+
 function restrictPhoneInput(event: FormEvent<HTMLInputElement>) {
   event.currentTarget.value = formatPatientPhone(event.currentTarget.value);
+}
+
+function SexField({ defaultValue }: { defaultValue?: string }) {
+  return (
+    <div className="space-y-2">
+      <label className="text-sm font-medium text-slate-700" htmlFor="patient-sex">Sexo</label>
+      <select
+        id="patient-sex"
+        name="sex"
+        required
+        defaultValue={defaultValue === 'male' || defaultValue === 'female' ? defaultValue : ''}
+        className={selectClass}
+      >
+        <option value="" disabled>Selecione</option>
+        <option value="female">Fêmea</option>
+        <option value="male">Macho</option>
+      </select>
+    </div>
+  );
 }
 
 export function AddPatientModal({
@@ -45,15 +66,16 @@ export function AddPatientModal({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-700">Espécie</label>
-              <select name="species" className="flex h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+              <select name="species" className={selectClass}>
                 <option value="dog">Cão</option>
                 <option value="cat">Gato</option>
               </select>
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">Peso (kg)</label>
-              <Input name="weight" type="number" step="0.1" required placeholder="Ex: 10.5" />
-            </div>
+            <SexField />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-700">Peso (kg)</label>
+            <Input name="weight" type="number" step="0.1" required placeholder="Ex: 10.5" />
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-700">Raça</label>
@@ -130,16 +152,17 @@ export function EditPatientModal({
               <select
                 name="species"
                 defaultValue={patient.species}
-                className="flex h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className={selectClass}
               >
                 <option value="dog">Cão</option>
                 <option value="cat">Gato</option>
               </select>
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">Peso (kg)</label>
-              <Input name="weight" type="number" step="0.1" min="0.1" required defaultValue={patient.weight} placeholder="Ex: 10.5" />
-            </div>
+            <SexField defaultValue={patient.sex} />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-700">Peso (kg)</label>
+            <Input name="weight" type="number" step="0.1" min="0.1" required defaultValue={patient.weight} placeholder="Ex: 10.5" />
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-700">Raça</label>

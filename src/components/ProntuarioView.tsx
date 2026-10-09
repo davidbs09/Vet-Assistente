@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import { Printer } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import type { Consultation, Patient } from '../types/clinical';
+import { formatPatientSex } from './patients/patientForm';
 import { Button } from './ui';
 
 export default function ProntuarioView({ patient, consultations, onBack }: { patient: Patient, consultations: Consultation[], onBack: () => void }) {
@@ -36,6 +37,7 @@ export default function ProntuarioView({ patient, consultations, onBack }: { pat
             <div>
               <strong>Paciente:</strong> ${patient.name}<br>
               <strong>Espécie:</strong> ${patient.species === 'dog' ? 'Cão' : 'Gato'}<br>
+              <strong>Sexo:</strong> ${formatPatientSex(patient.sex)}<br>
               <strong>Raça:</strong> ${patient.breed}
             </div>
             <div style="text-align: right;">
@@ -90,7 +92,7 @@ export default function ProntuarioView({ patient, consultations, onBack }: { pat
         <div className="flex items-center justify-between border-b border-slate-100 pb-8">
           <div>
             <h1 className="text-3xl font-bold text-slate-900">{patient.name}</h1>
-            <p className="text-slate-500">{patient.species === 'dog' ? 'Cão' : 'Gato'} • {patient.breed}</p>
+            <p className="text-slate-500">{patient.species === 'dog' ? 'Cão' : 'Gato'} • {formatPatientSex(patient.sex)} • {patient.breed}</p>
           </div>
           <div className="text-right">
             <p className="text-sm font-medium text-slate-500">Proprietário</p>

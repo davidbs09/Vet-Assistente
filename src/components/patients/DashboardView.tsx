@@ -2,6 +2,7 @@ import { Cat, ChevronRight, Dog, History, Plus, Search, User as UserIcon } from 
 import { motion } from 'framer-motion';
 import type { Patient } from '../../types/clinical';
 import { Button, Input } from '../ui';
+import { formatPatientSex } from './patientForm';
 
 export default function DashboardView({
   patients,
@@ -64,7 +65,7 @@ export default function DashboardView({
             </div>
             <div className="mt-4">
               <h3 className="font-bold text-slate-900">{patient.name}</h3>
-              <p className="text-sm text-slate-500">{patient.breed} • {patient.weight}kg</p>
+              <p className="text-sm text-slate-500">{patient.breed} • {formatPatientSex(patient.sex)} • {patient.weight}kg</p>
             </div>
             <div className="mt-4 flex items-center gap-2 border-t border-slate-100 pt-4 text-xs text-slate-400">
               <UserIcon className="h-3 w-3" />

@@ -77,7 +77,8 @@
           ],
           "clinical_protocols": {
                "anamnesis_analysis": [
-                    "Avaliar rigorosamente a espécie (cão ou gato), raça (predisposições genéticas e sensibilidades farmacológicas, como mutação MDR1 em Collies/Pastores), idade e peso exato em quilogramas (kg).",
+                    "Avaliar rigorosamente a espécie (cão ou gato), sexo (macho ou fêmea), raça (predisposições genéticas e sensibilidades farmacológicas, como mutação MDR1 em Collies/Pastores), idade e peso exato em quilogramas (kg).",
+                    "SEXO COMO FILTRO ANATÔMICO: se o paciente for macho, exclua hipóteses de útero, ovário, piometra, metrite e gestação. Se for fêmea, exclua próstata e orquite. Dose e conduta também mudam com o sexo quando a monografia pedir.",
                     "Analisar histórico de queixa principal, evolução cronológica dos sintomas, apetite, ingestão hídrica, micção, defecação e estado de vacinação e desverminação.",
                     "Identificar sinais de alarme ou urgências críticas (dispneia, dilatação/torção gástrica, obstrução uretral em felinos, choque, convulsões contínuas, abdômen agudo).",
                     "Classificar a GRAVIDADE do caso antes de prescrever: leve | moderado | moderado a grave | gravíssimo. Essa classificação define via (oral vs injetável) e se entra antibiótico de primeira linha."
@@ -110,6 +111,7 @@
                ],
                "clinical_reasoning_rules": [
                     "Pense com os livros e os sistemas abertos na mesa. Crivellenti define a ordem da rotina brasileira; Nelson, Ettinger, Merck e Saunders definem o protocolo da doença. Não invente um 'protocolo de plantão' genérico.",
+                    "O sexo do paciente é contexto obrigatório: não proponha doença de órgão que o animal não tem.",
                     "Interprete sinais vitais na espécie: no cão, 38,0–39,2 °C é normotermia; 38 °C NÃO é febre. No gato, 38,1–39,2 °C é faixa normal. Temperatura normal não descarta infecção, mas muda o peso de quadros classicamente febris/hemolíticos.",
                     "Ordene os diferenciais por (1) compatibilidade com OS SINAIS DESTE PACIENTE (o que há e o que falta), (2) frequência na casuística brasileira de pequenos animais, (3) gravidade se atrasar o tratamento. Nunca por ordem alfabética nem por 'família de doença'.",
                     "Em hemoparasitoses caninas com Rhipicephalus na rotina do Brasil: Ehrlichia canis é a hipótese líder; Babesia vogeli/spp. é o segundo diferencial clássico (coinfecção comum — não rebaixe só porque ainda não há icterícia ou hemoglobinúria); Anaplasma platys costuma ser mais indolente e entra depois, salvo sangramento/trombocitopenia evidentes.",

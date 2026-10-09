@@ -15,7 +15,7 @@ import AppHeader from './components/layout/AppHeader';
 import DashboardView from './components/patients/DashboardView';
 import PatientDetailView from './components/patients/PatientDetailView';
 import { AddPatientModal, DeletePatientModal, EditPatientModal } from './components/patients/PatientModals';
-import { isValidPatientPhone, normalizePatientPhone, readPatientForm } from './components/patients/patientForm';
+import { isValidPatientPhone, readPatientForm } from './components/patients/patientForm';
 import {
   AppLoadingScreen,
   SessionCheckingScreen,
@@ -407,6 +407,7 @@ export default function App() {
           && updated.species === current.species
           && updated.breed === current.breed
           && updated.weight === current.weight
+          && updated.sex === current.sex
           && updated.ownerName === current.ownerName
           && updated.ownerPhone === current.ownerPhone
         ) {
@@ -562,19 +563,17 @@ export default function App() {
       await dropBlockedAccess(mapAuthError(err));
       return;
     }
-    const formData = new FormData(form);
-    const ownerPhone = normalizePatientPhone(String(formData.get('ownerPhone') || ''));
-    if (!isValidPatientPhone(ownerPhone)) {
+    const fields = readPatientForm(form);
+    if (!fields.sex) {
+      alert('Informe o sexo do animal.');
+      return;
+    }
+    if (!isValidPatientPhone(fields.ownerPhone)) {
       alert('Informe o telefone com DDD e número, só dígitos. Ex: 11964646464');
       return;
     }
     const newPatient = {
-      name: formData.get('name') as string,
-      species: formData.get('species') as 'dog' | 'cat',
-      breed: formData.get('breed') as string,
-      weight: parseFloat(formData.get('weight') as string),
-      ownerName: formData.get('ownerName') as string,
-      ownerPhone,
+      ...fields,
       createdAt: Timestamp.now(),
       createdBy: user.uid,
     };
@@ -616,8 +615,8 @@ export default function App() {
       return;
     }
     const fields = readPatientForm(form);
-    if (!fields.name || !fields.breed || !fields.ownerName || Number.isNaN(fields.weight) || fields.weight <= 0) {
-      alert('Preencha nome, raça, peso, proprietário e telefone para salvar a ficha.');
+    if (!fields.name || !fields.breed || !fields.ownerName || !fields.sex || Number.isNaN(fields.weight) || fields.weight <= 0) {
+      alert('Preencha nome, sexo, raça, peso, proprietário e telefone para salvar a ficha.');
       return;
     }
     if (!isValidPatientPhone(fields.ownerPhone)) {

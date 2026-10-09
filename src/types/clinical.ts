@@ -1,9 +1,12 @@
 import type { DiagnosisResult } from '../services/geminiService';
 
+export type PatientSex = 'male' | 'female';
+
 export interface Patient {
   id: string;
   name: string;
   species: 'dog' | 'cat';
+  sex?: PatientSex;
   breed: string;
   weight: number;
   ownerName: string;

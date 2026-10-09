@@ -130,7 +130,7 @@ export default function NewConsultationView({ patient, onBack, onComplete }: { p
     setLoading(true);
     try {
       const advice = await getVeterinaryAdvice(
-        { species: patient.species, breed: patient.breed, weight: patient.weight },
+        { species: patient.species, breed: patient.breed, weight: patient.weight, sex: patient.sex },
         symptoms,
         exams
       );

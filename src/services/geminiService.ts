@@ -34,13 +34,19 @@ function speciesLabel(species: string): string {
   return species;
 }
 
+function sexLabel(sex?: string): string {
+  if (sex === 'male') return 'Macho';
+  if (sex === 'female') return 'Fêmea';
+  return 'Não informado';
+}
+
 function fillPromptTemplate(vars: Record<string, string>): string {
   return prompts.clinical_consultation_prompt_template.replace(/\{\{(\w+)\}\}/g, (_, key: string) => vars[key] ?? 'Não informado');
 }
 
 function fillTestPrompt(vars: Record<string, string>): string {
   return `Paciente: ${vars.species} (Raça: ${vars.breed}), Peso: ${vars.weight} kg.
-Idade/Sexo: ${vars.age_and_sex}.
+Sexo: ${vars.sex}.
 Sintomas e anamnese: ${vars.symptoms}
 Exames: ${vars.exams_data}
 
@@ -57,7 +63,7 @@ Não aninhe diagnosis nem treatment como objeto. Inclua as 8 fontes obrigatória
 
 const USE_TEST_SYSTEM_INSTRUCTION = true;
 
-function buildTestSystemInstruction(patientInfo: { species: string; breed: string; weight: number }): string {
+function buildTestSystemInstruction(patientInfo: { species: string; breed: string; weight: number; sex?: string }): string {
   return `Você é uma inteligência artificial veterinária de alta precisão, especializada em cães e gatos.
 Sua tarefa é fornecer diagnósticos e tratamentos baseados em evidências, pesquisando obrigatoriamente no mínimo nas seguintes fontes:
 1. Nelson & Couto - Medicina Interna de Pequenos Animais
@@ -70,7 +76,7 @@ Sua tarefa é fornecer diagnósticos e tratamentos baseados em evidências, pesq
 8. Vetalfa (para medicações, nomes comerciais e dosagens)
 
 Para cada consulta, você deve:
-1. Analisar os sintomas e informações do paciente (espécie, raça, peso: ${patientInfo.weight}kg).
+1. Analisar os sintomas e o paciente (espécie, raça, sexo: ${sexLabel(patientInfo.sex)}, peso: ${patientInfo.weight}kg). Use o sexo para excluir o que for anatomicamente impossível (macho não tem útero/piometra; fêmea não tem próstata).
 2. Se houver exames (imagens ou PDFs convertidos em texto/imagem), analise-os cuidadosamente.
 3. Fornecer um diagnóstico provável e diferenciais com likelihood "Mais provável", "Plausível" ou "Menos provável". Nunca use "A descartar".
 4. No treatment: conduta até a recuperação e como desvendar qual hipótese é o problema real. O tratamento é o foco principal.
@@ -83,7 +89,7 @@ Para cada consulta, você deve:
 Responda SEMPRE em formato JSON estruturado com as chaves: diagnosis, differentials, treatment, medications, suggestedExams, sources.`;
 }
 
-function buildSystemInstruction(patientInfo: { species: string; breed: string; weight: number }): string {
+function buildSystemInstruction(patientInfo: { species: string; breed: string; weight: number; sex?: string }): string {
   const sources = system_instruction.mandatory_sources
     .map((source, index) => {
       const authors = 'authors' in source && source.authors ? ` — ${source.authors}` : '';
@@ -107,6 +113,7 @@ O array "sources" DEVE incluir as ${system_instruction.mandatory_sources.length}
 PACIENTE DESTA CONSULTA
 - Espécie: ${speciesLabel(patientInfo.species)}
 - Raça: ${patientInfo.breed}
+- Sexo: ${sexLabel(patientInfo.sex)} (exclua hipóteses anatomicamente impossíveis: macho não tem útero/ovário/piometra; fêmea não tem próstata)
 - Peso: ${patientInfo.weight} kg (toda dose: mg/kg da monografia atual VetSmart + AlfaVet × este peso; depois converta para comprimido ou mL da apresentação vigente no Brasil)
 
 PROTOCOLO DE ANAMNESE
@@ -407,7 +414,7 @@ async function postAi<T>(path: string, body: Record<string, unknown>, timeoutMs:
 }
 
 export async function getVeterinaryAdvice(
-  patientInfo: { species: string; breed: string; weight: number },
+  patientInfo: { species: string; breed: string; weight: number; sex?: string },
   symptoms: string,
   exams?: { data: string; mimeType: string }[]
 ): Promise<DiagnosisResult> {
@@ -418,7 +425,8 @@ export async function getVeterinaryAdvice(
     species: speciesLabel(patientInfo.species),
     breed: patientInfo.breed,
     weight: String(patientInfo.weight),
-    age_and_sex: 'Não informado neste registro',
+    sex: sexLabel(patientInfo.sex),
+    age_and_sex: sexLabel(patientInfo.sex),
     symptoms,
     exams_data: exams && exams.length > 0
       ? `${exams.length} exame(s) anexado(s) nesta consulta (imagem ou PDF). Interprete os arquivos enviados e correlacione com a queixa.`

@@ -2,7 +2,7 @@ import { FilePlus, History, Pencil, Printer, Trash2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import type { Consultation, Patient } from '../../types/clinical';
 import { Button } from '../ui';
-import { formatPatientPhone } from './patientForm';
+import { formatPatientPhone, formatPatientSex } from './patientForm';
 
 export default function PatientDetailView({
   patient,
@@ -69,6 +69,10 @@ export default function PatientDetailView({
               <div className="flex justify-between text-sm">
                 <span className="text-slate-500">Espécie</span>
                 <span className="font-medium capitalize">{patient.species === 'dog' ? 'Cão' : 'Gato'}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-500">Sexo</span>
+                <span className="font-medium">{formatPatientSex(patient.sex)}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-slate-500">Raça</span>
