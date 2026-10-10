@@ -1,0 +1,129 @@
+{
+  "version": 1,
+  "description": "Formulário dos medicamentos mais usados, agrupados por objetivo terapêutico. É a PRIMEIRA consulta do especialista de medicamentos: ele escolhe aqui o fármaco (status 'recomendado' = primeira escolha; 'opcional' = alternativa de substância diferente) e só depois vai ao livro buscar a DOSE pelo peso. Enquanto as listas estiverem vazias, o sistema funciona como antes (escolha direto pelas fontes).",
+  "statusLegend": {
+    "recomendado": "Primeira escolha para o objetivo. Vira o medicamento principal.",
+    "opcional": "Substituto válido de substância diferente para o mesmo objetivo. Candidato ao campo 'alternative' quando a clínica não tiver o recomendado."
+  },
+  "medicationFields": {
+    "name": "Princípio ativo (e marca/apresentação se quiser orientar).",
+    "status": "'recomendado' ou 'opcional'.",
+    "species": "Opcional. ['dog'] | ['cat'] | ['dog','cat']. Ausente = serve às duas espécies.",
+    "route": "Opcional. Via usual (oral, IV, IM, SC).",
+    "notes": "Opcional. Observação curta (ex.: evitar em gatos, uso hospitalar)."
+  },
+  "classes": [
+    {
+      "id": "analgesico",
+      "label": "Analgésicos",
+      "objective": "Controle da dor",
+      "medications": [
+        { "name": "Dipirona (Novalgina)", "status": "recomendado", "species": ["dog"] },
+        { "name": "Meloxicam (Maxicam/Metacam)", "status": "opcional", "species": ["dog"] },
+        { "name": "Carprofeno (Rimadyl)", "status": "opcional", "species": ["dog"] },
+        { "name": "Buprenorfina", "status": "opcional", "species": ["dog"], "notes": "Apresentações específicas" },
+        { "name": "Tramadol (Tramal)", "status": "opcional", "species": ["dog"] },
+
+        { "name": "Buprenorfina", "status": "recomendado", "species": ["cat"], "notes": "Apresentações específicas" },
+        { "name": "Butorfanol", "status": "opcional", "species": ["cat"], "notes": "Apresentações específicas" },
+        { "name": "Dipirona (Novalgina)", "status": "opcional", "species": ["cat"], "notes": "Conforme protocolo veterinário" },
+        { "name": "Robenacoxibe (Onsior)", "status": "opcional", "species": ["cat"], "notes": "Indicações específicas" },
+        { "name": "Meloxicam (Maxicam/Metacam)", "status": "opcional", "species": ["cat"], "notes": "Conforme indicação e bula aplicável" }
+      ]
+    },
+    {
+      "id": "antipiretico_antiinflamatorio",
+      "label": "Antipiréticos e anti-inflamatórios",
+      "objective": "Controle de febre e inflamação",
+      "medications": [
+        { "name": "Dipirona (Novalgina)", "status": "recomendado", "species": ["dog"] },
+        { "name": "Meloxicam (Maxicam/Metacam)", "status": "opcional", "species": ["dog"] },
+        { "name": "Carprofeno (Rimadyl)", "status": "opcional", "species": ["dog"] },
+        { "name": "Robenacoxibe (Onsior)", "status": "opcional", "species": ["dog"] },
+        { "name": "Cetoprofeno (Ketofen)", "status": "opcional", "species": ["dog"] },
+
+        { "name": "Dipirona (Novalgina)", "status": "recomendado", "species": ["cat"] },
+        { "name": "Meloxicam (Maxicam/Metacam)", "status": "opcional", "species": ["cat"], "notes": "Com precauções específicas" },
+        { "name": "Robenacoxibe (Onsior)", "status": "opcional", "species": ["cat"] },
+        { "name": "Cetoprofeno", "status": "opcional", "species": ["cat"], "notes": "Uso selecionado" },
+        { "name": "Carprofeno", "status": "opcional", "species": ["cat"], "notes": "Não é opção rotineira para tratamento repetido em gatos" }
+      ]
+    },
+    {
+      "id": "antiespasmodico",
+      "label": "Antiespasmódicos",
+      "objective": "Controle de espasmo/cólica (dor visceral espasmódica)",
+      "medications": [
+        { "name": "Butilbrometo de escopolamina (Buscopan)", "status": "recomendado", "species": ["dog"] },
+        { "name": "Escopolamina + dipirona (Buscopan Composto/Compositum)", "status": "opcional", "species": ["dog"] },
+        { "name": "Papaverina", "status": "opcional", "species": ["dog"] },
+        { "name": "Dipirona (Novalgina)", "status": "opcional", "species": ["dog"], "notes": "Também analgésico e antipirético" },
+
+        { "name": "Butilbrometo de escopolamina", "status": "recomendado", "species": ["cat"], "notes": "Uso selecionado" },
+        { "name": "Escopolamina + dipirona", "status": "opcional", "species": ["cat"], "notes": "Somente após avaliação veterinária" },
+        { "name": "Dipirona (Novalgina)", "status": "opcional", "species": ["cat"], "notes": "Conforme protocolo veterinário" }
+      ]
+    },
+    {
+      "id": "antibiotico",
+      "label": "Antimicrobianos",
+      "objective": "Cobertura antimicrobiana (processo infeccioso/bacteriano)",
+      "medications": [
+        { "name": "Amoxicilina + clavulanato (Clavamox/Clavulin)", "status": "recomendado", "species": ["dog"], "route": "oral" },
+        { "name": "Cefalexina (Rilexine)", "status": "opcional", "species": ["dog"], "route": "oral" },
+        { "name": "Doxiciclina (Doxifin)", "status": "opcional", "species": ["dog"], "route": "oral" },
+        { "name": "Clindamicina (Antirobe)", "status": "opcional", "species": ["dog"], "route": "oral" },
+        { "name": "Enrofloxacino", "status": "opcional", "species": ["dog"] },
+        { "name": "Ceftriaxona", "status": "opcional", "species": ["dog"], "route": "injetável" },
+        { "name": "Ampicilina", "status": "opcional", "species": ["dog"] },
+        { "name": "Benzilpenicilina procaína + di-hidroestreptomicina", "status": "opcional", "species": ["dog"], "route": "injetável" },
+
+        { "name": "Amoxicilina", "status": "recomendado", "species": ["cat"], "route": "oral", "notes": "Apresentações veterinárias ou adequadas à espécie" },
+        { "name": "Amoxicilina + clavulanato (Clavamox/Clavulin)", "status": "opcional", "species": ["cat"], "route": "oral" },
+        { "name": "Doxiciclina (Doxifin)", "status": "opcional", "species": ["cat"], "route": "oral" },
+        { "name": "Cefalexina", "status": "opcional", "species": ["cat"], "route": "oral", "notes": "Apresentações adequadas à espécie" },
+        { "name": "Cefovecina (Convenia)", "status": "opcional", "species": ["cat"], "route": "injetável SC" },
+        { "name": "Benzilpenicilina procaína + di-hidroestreptomicina", "status": "opcional", "species": ["cat"], "route": "injetável" },
+        { "name": "Enrofloxacino", "status": "opcional", "species": ["cat"] },
+        { "name": "Ampicilina", "status": "opcional", "species": ["cat"], "route": "injetável" },
+        { "name": "Ceftriaxona", "status": "opcional", "species": ["cat"], "route": "injetável", "notes": "Uso selecionado, geralmente extrabula" }
+      ]
+    },
+    {
+      "id": "antiemetico",
+      "label": "Antieméticos",
+      "objective": "Controle de náusea e vômito",
+      "medications": []
+    },
+    {
+      "id": "gastroprotetor",
+      "label": "Protetores gástricos e antiácidos",
+      "objective": "Proteção de mucosa / redução de acidez",
+      "medications": []
+    },
+    {
+      "id": "fluidoterapia",
+      "label": "Fluidoterapia e eletrólitos",
+      "objective": "Reposição hidroeletrolítica e suporte",
+      "medications": []
+    },
+    {
+      "id": "corticoide",
+      "label": "Corticosteroides",
+      "objective": "Anti-inflamatório esteroidal / imunossupressão",
+      "medications": []
+    },
+    {
+      "id": "antiparasitario",
+      "label": "Antiparasitários",
+      "objective": "Controle de endo e ectoparasitas",
+      "medications": []
+    },
+    {
+      "id": "antifungico",
+      "label": "Antifúngicos",
+      "objective": "Infecção fúngica",
+      "medications": []
+    }
+  ]
+}
