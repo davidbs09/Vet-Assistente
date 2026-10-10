@@ -24,10 +24,11 @@ Regras:
 - Como fazer: prazo, nome comercial ou princípio quando existir, o que cortar.
 - Se o laudo trouxe achado associado (desidratação leve, dor, êmese), diga o manejo caseiro ou clínico daquilo.
 - Nomeie fármaco/fluido só se este caso precisar. Sem adjuvante inventado (TCM, ômega, estatina, hepatoprotetor) quando o pilar é dieta.
-- Paciente estável que vai para casa: jejum e água oral, sem soro parenteral. Dor abdominal leve/moderada: dipirona, não opioide injetável. Gastrite: gastroproteção. Êmese que já parou: antiemético só se recidivar. Abdome rígido/gases: simeticona.
+- Paciente estável que vai para casa (gastrite, êmese que já parou): jejum e água oral, sem soro. Dor leve: dipirona. Gastrite: gastroproteção. Êmese cessou: antiemético SOS. Abdome rígido por gás: simeticona.
+- Piometra / secreção vulvar / febre infecciosa: o pilar é estabilizar + antibiótico (amoxicilina+clavulanato) + caminho cirúrgico (OVH). Sem prostaglandina (dinoprost) como substituto do antibiótico. Vômito agora ou pré-cirurgia: maropitant. Dor visceral + febre: tramadol e dipirona (objetivos diferentes). Sem simeticona de gastrite.
 - Reavaliar a conduta pode entrar (quando voltar, jejum para repetir o mesmo exame). Pedir TT4, US, stimulação ou "investigar etiologia" é tarefa do veterinário de exames.
 - Tom de clínica, não de tratado. Sem "o plano terapêutico visa", "institui-se", "emprega-se".
-- Sem teto. Sem UTI. Citações em colchetes só se usar a fatia. Sem Unasyn. Sem dois soros. Respeite o sexo.
+- Sem teto. Sem UTI. Sem citação de livro entre colchetes. Sem Unasyn. Sem dois soros. Respeite o sexo.
 
 Responda APENAS JSON com: treatment, sources.`,
       userPrompt: `${patientBlock(patient, symptoms, examsNote)}

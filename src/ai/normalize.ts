@@ -35,6 +35,16 @@ function asText(value: unknown, fallback = ''): string {
   return fallback;
 }
 
+function stripCitations(value: string): string {
+  return value
+    .replace(/\s*\[[^\]]*(?:Nelson|Couto|Jeric[oó]|Crivellenti|Bretas|Viana|Saunders|Sherding|Elsevier|Moraillon|Merck|Vetsmart|AlfaVet|Tratado|Papich)[^\]]*\]/gi, '')
+    .replace(/\s*\((?:Bretas(?:\s+CAN|\s+FEL)?|CAN\/FEL|Vetsmart(?:\/AlfaVet)?|AlfaVet)\)/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\s+\./g, '.')
+    .replace(/\s+,/g, ',')
+    .trim();
+}
+
 function pickText(record: Record<string, unknown>, keys: string[], fallback = ''): string {
   for (const key of keys) {
     const value = asText(record[key]);
@@ -200,11 +210,11 @@ function normalizeMedication(item: unknown): DiagnosisResult['medications'][numb
     || extractFrequency(pickText(record, ['dose_final', 'dose_referencia', 'observacoes', 'instructions']));
   const duration = pickText(record, ['duration', 'duracao', 'instructions', 'indication']);
   return {
-    name: pickText(record, ['name', 'medicamento'], 'Medicamento'),
-    dosage: dosage || 'Não informado',
-    frequency: frequency || 'Conforme orientação',
-    duration: duration || 'Conforme reavaliação',
-    forDiagnosis: pickText(record, ['forDiagnosis', 'indication', 'objetivo']) || undefined,
+    name: stripCitations(pickText(record, ['name', 'medicamento'], 'Medicamento')),
+    dosage: stripCitations(dosage || 'Não informado'),
+    frequency: stripCitations(frequency || 'Conforme orientação'),
+    duration: stripCitations(duration || 'Conforme reavaliação'),
+    forDiagnosis: stripCitations(pickText(record, ['forDiagnosis', 'indication', 'objetivo'])) || undefined,
   };
 }
 
@@ -219,13 +229,15 @@ function normalizeDifferential(item: unknown): DifferentialDiagnosis {
 
 export function normalizeResult(parsed: Record<string, unknown>): DiagnosisResult {
   return {
-    diagnosis: flattenDiagnosis(parsed.diagnosis),
+    diagnosis: stripCitations(flattenDiagnosis(parsed.diagnosis)),
     differentials: Array.isArray(parsed.differentials) ? parsed.differentials.map(normalizeDifferential) : [],
-    treatment: flattenTreatment(parsed.treatment),
+    treatment: stripCitations(flattenTreatment(parsed.treatment)),
     medications: pickList(parsed, ['medications', 'medicacoes', 'prescription', 'prescricao', 'lista']).map(normalizeMedication),
-    suggestedExams: Array.isArray(parsed.suggestedExams) ? parsed.suggestedExams.map((item) => asText(item)).filter(Boolean) : [],
-    sources: Array.isArray(parsed.sources) ? parsed.sources.map((item) => asText(item)).filter(Boolean) : [],
-    examFindings: pickText(parsed, ['examFindings', 'achados', 'leitura']),
+    suggestedExams: Array.isArray(parsed.suggestedExams)
+      ? parsed.suggestedExams.map((item) => stripCitations(asText(item))).filter(Boolean)
+      : [],
+    sources: [],
+    examFindings: stripCitations(pickText(parsed, ['examFindings', 'achados', 'leitura'])),
   };
 }
 
@@ -248,7 +260,7 @@ export function mergeResult(base: DiagnosisResult, next: DiagnosisResult): Diagn
     treatment: next.treatment || base.treatment,
     medications: next.medications.length ? next.medications : base.medications,
     suggestedExams: next.suggestedExams.length ? next.suggestedExams : base.suggestedExams,
-    sources: Array.from(new Set([...base.sources, ...next.sources])),
+    sources: [],
     examFindings: next.examFindings || base.examFindings,
   };
 }

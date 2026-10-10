@@ -26,6 +26,7 @@ Proibido:
 - Chamar de leve o que está 1,5× acima (colesterol 509 não é leve) e de moderado o que está 4% acima (FA 156 é leve).
 - Vacina, dieta, viagem ou exame que a anamnese não escreveu. Sem "vacinação em dia" se o tutor não falou disso.
 - Se a anamnese DISSER vacinas em dia: parvo/cinomose não são o achado principal. Se não disser, ignore vacina.
+- Citar Nelson, Jericó, Couto, Bretas ou qualquer livro no laudo.
 
 Responda APENAS JSON com: diagnosis, sources.`,
       userPrompt: `${patientBlock(patient, symptoms, examsNote)}

@@ -47,9 +47,10 @@ function validationBrief(draft: DiagnosisResult, symptoms: string, weight: numbe
   const admitted = /internad|choque|incoercivel|uti/.test(fold(symptoms));
   const emesisStopped = /eme[sz]e|vomit/.test(fold(symptoms)) && /parou|cessou|nao teve mais|nao vomitou mais/.test(fold(symptoms));
   const standingAntiemetic = /maropitant|cerenia|ondansetron|vonau/.test(medBlob) && !/sos|se recidiv|se voltar|se apresentar|condicional/.test(medBlob);
-  const gastritis = /gastrite|irritacao gastrica/.test(caseBlob);
+  const pyometra = /piometra|secrecao vulvar|descarga vulvar|infeccao uterina/.test(caseBlob);
+  const gastritis = /gastrite|irritacao gastrica/.test(caseBlob) && !pyometra;
   const rigidAbdomen = /abdome rigido|abdomen rigido|rigidez abdominal|colica/.test(caseBlob);
-  const outpatient = !admitted;
+  const outpatient = !admitted && !pyometra;
   const examList = fold((draft.suggestedExams || []).join(' '));
   const abdominalGi = /abdome|abdomen|gastrite|pancreat|eme[sz]e|vomit|corpo estranho/.test(caseBlob);
 
@@ -78,9 +79,18 @@ function validationBrief(draft: DiagnosisResult, symptoms: string, weight: numbe
     rigidAbdomen && !/dipiron/.test(medBlob)
       ? '- ABDOME RÍGIDO sem dipirona oral. INCLUA gotas. Sem opioide.'
       : '- Analgesia ambulatorial: conferir.',
-    rigidAbdomen && !/simeticon/.test(medBlob)
-      ? '- ABDOME RÍGIDO/cólica sem simeticona. INCLUA 5 gotas (não 0,5 mL).'
-      : '- Gases: conferir se o caso pede.',
+    rigidAbdomen && gastritis && !/simeticon/.test(medBlob)
+      ? '- ABDOME RÍGIDO de gastrite sem simeticona. INCLUA 5 gotas (não 0,5 mL).'
+      : '- Gases: só se for gastrite/cólica, não piometra.',
+    pyometra && !/amoxicil|clavulan|synulox/.test(medBlob)
+      ? '- PIOMETRA SEM ANTIBIÓTICO. INCLUA amoxicilina+clavulanato (Synulox) 12,5–25 mg/kg q 12 h, 10–14 dias. Dinoprost não conta.'
+      : '- Infecção uterina vs antibiótico: conferir.',
+    pyometra && !/tramadol|cronidor/.test(medBlob)
+      ? '- PIOMETRA sem tramadol. INCLUA Cronidor oral para dor visceral (além da dipirona).'
+      : '- Analgesia visceral: conferir se o caso pede.',
+    pyometra && /vomit|eme[sz]e/.test(caseBlob) && !/parou|cessou/.test(anamnesis) && !/maropitant|cerenia/.test(medBlob)
+      ? '- PIOMETRA com vômito agora: INCLUA maropitant 1 mg/kg SC. Ondansetrona SOS não basta.'
+      : '- Antiemético sistêmico: conferir.',
     `- PESO ${weight} kg. dosage TEM que mostrar: mg/kg × ${weight} = mg totais = gotas/mL/fração.`,
     /omeprazol/.test(medBlob) && /1 comprimido|10 mg total/.test(medBlob) && weight < 8
       ? `- OMEPRAZOL: 1 comprimido de 10 mg em ${weight} kg passa de 1,5 mg/kg (teto Bretas). Vire ${weight} mg = ${weight}/10 do comprimido de 10 mg.`
@@ -97,9 +107,9 @@ function validationBrief(draft: DiagnosisResult, symptoms: string, weight: numbe
     abdominalGi && !/bioquim|ureia|creatin/.test(examList)
       ? '- EXAMES: faltou bioquímica (ALT, FA, ureia, creatinina, proteínas e frações).'
       : '- Bioquímica: conferir se o caso pede.',
-    abdominalGi && !/cpli|lipase pancreat/.test(examList)
+    abdominalGi && !pyometra && !/cpli|lipase pancreat/.test(examList)
       ? '- EXAMES: faltou cPLI. INCLUA para confirmar ou afastar pancreatite.'
-      : '- cPLI: conferir se o quadro abdominal pede.',
+      : '- cPLI: conferir se o quadro é gastrite/pâncreas (não piometra).',
     abdominalGi && !/ultrassom|ultrasson/.test(examList)
       ? '- EXAMES: faltou US abdominal.'
       : '- US: conferir.',
@@ -127,11 +137,11 @@ Checklist — execute um a um e corrija:
 3. diagnosis é o que está DEMONSTRADO (achado/síndrome). Etiologia sem TT4/stimulação/US só como "pode ser" no laudo, sem fechar.
 4. Magnitude do laboratório: leve não vira "significativa" nem "critérios preenchidos".
 5. treatment é a conduta de HOJE (pilar + como fazer + tutor). Sem "plano visa", sem investigar etiologia, sem TT4/US no texto. Sem adjuvante inventado se o pilar é dieta.
-6. medications é receituário de CASA: apresentação + mg/kg + conta deste peso. Um por objetivo. Sem Unasyn. Sem Cerenia/Butorfanol injetável se o paciente vai para casa.
-7. Cubra os OBJETIVOS (dor, protetor, gases, êmese). Êmese cessou = ondansetrona SOS, não maropitant contínuo. Gastrite = omeprazol. Abdome rígido = dipirona + simeticona. Conduta só nutricional: medications []. Não invente TCM.
-8. Dose: Bretas CAN/FEL × peso deste paciente. Mostre a conta. Não arredonde comprimido para cima se passar do teto. Dipirona 25 mg/kg, 1 gota = 25 mg. Omeprazol 1 mg/kg (não 10 mg fixos). Ondansetrona caseira: 0,5 mg/kg no Vonau 5 mg/mL, não a dose EV do Bretas.
+6. medications: apresentação + mg/kg + conta deste peso. Um por objetivo. Sem Unasyn. Cerenia injetável só se vômito agora, febre/piometra ou pré-cirurgia — não em gastrite leve.
+7. Infecção/piometra = antibiótico (Synulox) obrigatório; dinoprost não substitui. Dor+febre = dipirona e tramadol. Gastrite leve = omeprazol + simeticona + ondansetrona SOS. Conduta só nutricional: []. Não invente TCM.
+8. Dose × peso deste paciente. Mostre a conta. Não arredonde comprimido para cima se passar do teto. Dipirona 25 mg/kg, 1 gota = 25 mg. Omeprazol 1 mg/kg (não 10 mg fixos). Ondansetrona caseira: 0,5 mg/kg no Vonau 5 mg/mL. Sem citar livro no texto.
 9. suggestedExams: nome + o que responde. Abdome/gastrite/êmese: hemograma, bioquímica completa, cPLI, US e raio-x. O que a anamnese já pediu entra com "já solicitada". Sem ensaio de livro em cada item.
-10. sources com o tema consultado. Sem inventar página.
+10. Sem citar livro, autor ou página em diagnosis, treatment, medications ou suggestedExams. sources deve ser [].
 
 Responda APENAS JSON completo já corrigido: diagnosis, treatment, medications, suggestedExams, sources.`,
       userPrompt: `${patientBlock(patient, symptoms, examsNote)}
@@ -155,7 +165,11 @@ ${fixNote}` : ''}`,
     const clinical = fold(`${symptoms} ${result.diagnosis}`);
     const examList = fold((result.suggestedExams || []).join(' '));
     const abdominalGi = /abdome|abdomen|gastrite|pancreat|eme[sz]e|vomit|corpo estranho/.test(clinical);
-    if (abdominalGi && !/cpli|lipase pancreat/.test(examList)) {
+    const meds = fold(result.medications.map((item) => `${item.name} ${item.forDiagnosis || ''}`).join(' '));
+    if (/piometra|secrecao vulvar|infeccao uterina/.test(clinical) && !/amoxicil|clavulan|synulox/.test(meds)) {
+      issues.push('Piometra ainda sem amoxicilina+clavulanato. INCLUA Synulox. Dinoprost não conta como antibiótico.');
+    }
+    if (abdominalGi && !/piometra|vulvar/.test(clinical) && !/cpli|lipase pancreat/.test(examList)) {
       issues.push('suggestedExams ainda sem cPLI. INCLUA lipase pancreática específica para pancreatite.');
     }
     if (/raio-?x|radiograf/.test(fold(symptoms)) && !/raio-?x|radiograf/.test(examList)) {

@@ -24,6 +24,7 @@ Exames anexados: ${examsNote}
 
 Use o sexo como filtro anatômico: macho não tem útero, ovário, piometra nem gestação; fêmea não tem próstata.
 O que a anamnese afirma conta. O que ela NÃO afirma não existe no laudo: não invente vacina, dieta, viagem, gestação, exame ou sinal.
+Não cite livro, autor, editora nem página no texto. Consultamos; não falamos a fonte.
 ${/vacin/i.test(symptoms)
     ? 'A anamnese citou vacina. Se estiver em dia, não eleve parvovirose, cinomose nem hepatite infecciosa a principal.'
     : 'A anamnese NÃO citou vacina. Proibido escrever "vacinação em dia", "histórico vacinal" ou usar isso para excluir infecção.'}`;

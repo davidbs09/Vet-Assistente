@@ -11,7 +11,7 @@ const SYNONYMS: Record<string, string[]> = {
   tosse: ['antitussigeno', 'broncodilatador'],
   convuls: ['anticonvuls', 'epilep'],
   diabetes: ['hipoglicemiante', 'insulina'],
-  piometra: ['abortivo', 'progestageno'],
+  piometra: ['antibiotico', 'amoxicilina', 'clavulanato'],
   gestacao: ['gestante'],
   desidrat: ['fluido', 'cristaloid'],
   infeccao: ['antibiotico'],
@@ -59,10 +59,12 @@ export function buildKnowledgeQuery(
   }
   if (step === 'medications' || step === 'validate') {
     const clinical = fold(`${symptoms} ${draft.diagnosis} ${draft.treatment}`);
-    if (/gastrite|irritacao gastrica|eme[sz]e|vomit/.test(clinical)) {
+    if (/piometra|secrecao vulvar|vulvar|infeccao uterina/.test(clinical)) {
+      parts.push('amoxicilina clavulanato synulox maropitant cerenia tramadol dipirona');
+    } else if (/gastrite|irritacao gastrica|eme[sz]e|vomit/.test(clinical)) {
       parts.push('omeprazol ondansetrona dipirona');
     }
-    if (/abdome|abdomen|rigido|colica|gases|flatulen/.test(clinical)) {
+    if (/abdome|abdomen|rigido|colica|gases|flatulen/.test(clinical) && !/piometra|vulvar|uterin/.test(clinical)) {
       parts.push('dipirona simeticona');
     }
     if (/dor|analges|rigido/.test(clinical)) {

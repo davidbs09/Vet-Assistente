@@ -19,25 +19,29 @@ PESO DESTE PACIENTE: ${kg} kg. Toda conta usa esse número.
 
 Formato de cada item:
 - name: "Princípio (Marca + apresentação + concentração)"
-- dosage: "Dose terapêutica de X mg/kg (Bretas CAN). ${kg} kg × X = Y mg. Administrar [gotas/mL/fração] (Y mg). [Como dar]."
+- dosage: "Dose terapêutica de X mg/kg. ${kg} kg × X = Y mg. Administrar [gotas/mL/fração] (Y mg). [Como dar]."
 - frequency: "A cada N horas (SID/BID/TID)" — SOS se condicional
 - duration: prazo
 - forDiagnosis: um objetivo (dor abdominal ≠ gases ≠ gastroproteção ≠ êmese SOS)
 
 Contas-padrão (aplique em ${kg} kg, não copie o exemplo):
-- Dipirona gotas 500 mg/mL: CAN até 25 mg/kg q 8 h VO. Use 25 mg/kg. 1 gota = 25 mg. Gotas = (${kg} × 25) / 25 = ${kg} gotas.
-- Omeprazol 10 mg (Gaviz V): CAN 0,7–1,5 mg/kg q 24 h VO. Use 1 mg/kg. Total = ${kg} mg. Comprimidos = ${kg} / 10 (pode ser 1/2). Não dê 1 comprimido de 10 mg se o total for menor que 10 mg.
-- Ondansetrona em CASA: Vonau Vet 5 mg/mL VO 0,5 mg/kg (Vetsmart/AlfaVet). Total = ${kg} × 0,5 mg. mL = total / 5. NÃO use a dose EV do Bretas (0,1–0,22) nem comprimido de 4 mg que não fecha esta conta.
-- Simeticona 75 mg/mL: não está no Bretas. Empírico: 5 gotas VO, não invente 0,5 mL.
+- Dipirona gotas 500 mg/mL: 25 mg/kg q 8 h VO. 1 gota = 25 mg. Gotas = ${kg}.
+- Amoxicilina+clavulanato (Synulox): 12,5–25 mg/kg q 12 h VO. Em ${kg} kg use ~20 mg/kg e a apresentação que fecha (ex.: 250 mg se o total for ~250 mg).
+- Tramadol (Cronidor): 2–5 mg/kg q 8 h VO. Escolha o comprimido que fecha este peso.
+- Maropitant (Cerenia 10 mg/mL): 1 mg/kg SC. mL = ${kg} / 10. Só se vômito agora, febre sistêmica ou pré-cirurgia.
+- Omeprazol 10 mg: 1 mg/kg q 24 h VO. Total = ${kg} mg. Fração do comprimido de 10 mg.
+- Ondansetrona Vonau 5 mg/mL: 0,5 mg/kg VO SOS se a êmese JÁ PAROU e o caso é leve.
+- Simeticona 75 mg/mL: 5 gotas VO só se o quadro for gás/gastrite, não útero.
 
 Regras:
-- Leia anamnese + diagnóstico + objetivos. Primeira linha AMBULATORIAL. Sem Cerenia injetável, Butorfanol/Torbugesic ou soro, salvo internado/choque/êmese incoercível agora.
-- Abdome rígido / cólica: Dipirona (dor) E Simeticona (gases). São dois objetivos. Sem opioide.
-- Gastrite / irritação gástrica: Omeprazol (Gaviz) é obrigatório, em jejum 30 min.
-- Êmese que já parou: Ondansetrona SOS (Vonau 5 mg/mL). Sem Maropitant de rotina.
+- Leia anamnese + diagnóstico. O objetivo "infecção" é ANTIBIÓTICO, não prostaglandina.
+- Piometra / secreção vulvar / infecção uterina: amoxicilina+clavulanato (Synulox) é obrigatório, 10–14 dias. Sem Unasyn. Dinoprost/Lutalyse NÃO substitui o antibiótico e não entra se o caminho é estabilizar + cirurgia.
+- Vômito AINDA presente, febre alta ou pré-OVH: Maropitant 1 mg/kg SC (Cerenia). Êmese que já parou em gastrite leve: ondansetrona SOS. Sem os dois.
+- Dor + febre em piometra: Dipirona (febre/dor) E Tramadol oral (visceral). São dois objetivos. Sem Butorfanol/Torbugesic.
+- Gastrite leve, estável, êmese cessou: receituário de casa (dipirona, omeprazol, simeticona, ondansetrona SOS). Sem Cerenia, sem antibiótico, sem tramadol.
+- Simeticona só em gás/cólica de gastrite. Abdome rígido de piometra NÃO pede simeticona.
 - Conduta só nutricional: medications []. Sem TCM, ômega, estatina, hepatoprotetor.
-- Um por objetivo. Sem Unasyn. Sem dois antieméticos, dois analgésicos ou dois soros.
-- Se o treatment pediu opioide e o quadro é leve/moderado em casa: dipirona oral.
+- Um por objetivo. Sem dois antibióticos. Sem dois soros.
 
 Responda APENAS JSON com: medications, sources.`,
       userPrompt: `${patientBlock(patient, symptoms, examsNote)}
@@ -57,24 +61,41 @@ CORREÇÃO — a lista acima falhou. Devolva a lista COMPLETA já corrigida (o q
 ${fixNote}` : ''}`,
     };
   },
-  review(result: DiagnosisResult, _symptoms: string) {
-    const clinical = `${result.diagnosis} ${result.treatment}`;
+  review(result: DiagnosisResult, symptoms: string) {
+    const clinical = `${symptoms} ${result.diagnosis} ${result.treatment}`;
     const meds = result.medications.map((item) => `${item.name} ${item.dosage}`).join(' ');
     const treatment = result.treatment || '';
+    const pyometra = /piometra|secre[cç][aã]o vulvar|descarga vulvar|infec[cç][aã]o uterina/i.test(clinical);
+    const gastritis = /gastrite|irritação gástrica|irritacao gastrica/i.test(clinical) && !pyometra;
     const needsList = /ringer|soro|fluido|mg|ml|antibiot|analges|antiemet|dipiron|omeprazol|simeticon|comprimido|dose|mg\/kg/i.test(treatment)
-      || /gastrite|abdome r[ií]gido|abdomen r[ií]gido/i.test(clinical);
+      || /gastrite|abdome r[ií]gido|abdomen r[ií]gido|piometra/i.test(clinical);
     const issues: string[] = [];
     if (result.medications.length === 0 && (needsList || !treatment)) {
       issues.push('A lista veio vazia e este caso pede prescrição.');
     }
-    if (/gastrite|irritação gástrica|irritacao gastrica/i.test(clinical) && !/omeprazol/i.test(meds)) {
+    if (pyometra && !/amoxicil|clavulan|synulox/i.test(meds)) {
+      issues.push('Piometra/infecção uterina SEM antibiótico. Inclua amoxicilina+clavulanato (Synulox) 12,5–25 mg/kg q 12 h, 10–14 dias. Dinoprost não substitui.');
+    }
+    if (pyometra && /dinoprost|lutalyse|prostagland/i.test(meds) && !/amoxicil|clavulan|synulox/i.test(meds)) {
+      issues.push('Tire o dinoprost como “tratamento da infecção”. O item obrigatório é o antibiótico.');
+    }
+    if (pyometra && !/dipiron/i.test(meds)) {
+      issues.push('Piometra com dor/febre sem dipirona. Inclua 25 mg/kg, 1 gota/kg, q 8 h.');
+    }
+    if (pyometra && !/tramadol|cronidor/i.test(meds)) {
+      issues.push('Piometra: inclua tramadol oral (Cronidor) para dor visceral, além da dipirona.');
+    }
+    if (pyometra && /vomit|eme[sz]e/i.test(clinical) && !/parou|cessou/i.test(symptoms) && !/maropitant|cerenia/i.test(meds)) {
+      issues.push('Vômito ainda presente na piometra: inclua maropitant 1 mg/kg SC (Cerenia), não só ondansetrona SOS.');
+    }
+    if (gastritis && !/omeprazol/i.test(meds)) {
       issues.push('Gastrite sem omeprazol (Gaviz). Inclua com 1 mg/kg × peso, jejum 30 min.');
     }
-    if (/abdome r[ií]gido|abdomen r[ií]gido|rigidez abdominal/i.test(clinical) && !/dipiron/i.test(meds)) {
+    if (gastritis && /abdome r[ií]gido|abdomen r[ií]gido|rigidez abdominal/i.test(clinical) && !/dipiron/i.test(meds)) {
       issues.push('Abdome rígido sem dipirona gotas. Inclua 25 mg/kg, 1 gota = 25 mg.');
     }
-    if (/abdome r[ií]gido|abdomen r[ií]gido|c[oó]lica/i.test(clinical) && !/simeticon/i.test(meds)) {
-      issues.push('Abdome rígido sem simeticona. Inclua 5 gotas VO, não 0,5 mL.');
+    if (gastritis && /abdome r[ií]gido|abdomen r[ií]gido|c[oó]lica/i.test(clinical) && !/simeticon/i.test(meds)) {
+      issues.push('Abdome rígido de gastrite sem simeticona. Inclua 5 gotas VO, não 0,5 mL.');
     }
     return issues;
   },
