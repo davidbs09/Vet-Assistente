@@ -51,27 +51,6 @@ export function buildKnowledgeQuery(
   if (step === 'treatment' || step === 'medications' || step === 'validate') {
     parts.push(draft.treatment);
   }
-  if (step === 'exams' || step === 'validate') {
-    const clinical = fold(`${symptoms} ${draft.diagnosis}`);
-    if (/abdome|abdomen|gastrite|pancreat|eme[sz]e|vomit|corpo estranho/.test(clinical)) {
-      parts.push('hemograma bioquimica cpli lipase pancreatica ultrassom radiografia');
-    }
-  }
-  if (step === 'medications' || step === 'validate') {
-    const clinical = fold(`${symptoms} ${draft.diagnosis} ${draft.treatment}`);
-    if (/piometra|secrecao vulvar|vulvar|infeccao uterina/.test(clinical)) {
-      parts.push('amoxicilina clavulanato synulox maropitant cerenia tramadol dipirona');
-    } else if (/gastrite|irritacao gastrica|eme[sz]e|vomit/.test(clinical)) {
-      parts.push('omeprazol ondansetrona dipirona');
-    }
-    if (/abdome|abdomen|rigido|colica|gases|flatulen/.test(clinical) && !/piometra|vulvar|uterin/.test(clinical)) {
-      parts.push('dipirona simeticona');
-    }
-    if (/dor|analges|rigido/.test(clinical)) {
-      parts.push('dipirona');
-    }
-  }
-
   let query = fold(parts.filter(Boolean).join(' '));
   for (const [token, extras] of Object.entries(SYNONYMS)) {
     if (query.includes(token)) {

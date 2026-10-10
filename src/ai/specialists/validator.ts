@@ -1,179 +1,93 @@
+import { auditReport, type AuditIssue } from '../audit';
 import { patientBlock } from '../patient';
 import { listSources } from '../sources';
-import type { DiagnosisResult, Specialist } from '../types';
+import type { AdviceStep, DiagnosisResult, Specialist } from '../types';
 
 function fold(value: string): string {
   return value.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
 }
 
-function validationBrief(draft: DiagnosisResult, symptoms: string, weight: number): string {
-  const objectives = draft.medications.map((item) => (item.forDiagnosis || item.name || '').trim());
-  const foldedObjectives = objectives.map((item) => fold(item));
-  const counts = new Map<string, number>();
-  for (const item of foldedObjectives) {
-    if (!item) continue;
-    counts.set(item, (counts.get(item) || 0) + 1);
+const BOOK_NAMES = /nelson|couto|jeric|crivellenti|bretas|viana|saunders|sherding|elsevier|moraillon|merck|vetsmart|alfavet|tratado|papich/;
+
+const OWNER_LABEL: Record<string, string> = {
+  diagnosis: 'DIAGNÓSTICO',
+  treatment: 'CONDUTA',
+  medications: 'MEDICAMENTOS',
+  exams: 'EXAMES',
+};
+
+// O chefe audita o rascunho e aponta cada brecha ao especialista que a deixou passar.
+function validationBrief(draft: DiagnosisResult, symptoms: string): string {
+  const issues = auditReport(symptoms, draft);
+  if (!issues.length) {
+    return 'RELATÓRIO DO CHEFE: nenhuma brecha estrutural detectada. Ainda assim, confira a coerência clínica (objetivo × fármaco × dose × via) antes de assinar.';
   }
-  const duplicates = [...counts.entries()]
-    .filter(([, count]) => count > 1)
-    .map(([name, count]) => `${name} (${count}x)`);
-
-  const treatment = fold(draft.treatment);
-  const medBlob = fold(draft.medications.map((item) => `${item.name} ${item.dosage} ${item.frequency} ${item.duration} ${item.forDiagnosis || ''}`).join(' '));
-  const missing: string[] = [];
-  const pairs: Array<[string, RegExp]> = [
-    ['ringer / fluidoterapia', /ringer|fluidoterap|lactato/],
-    ['antiemético', /ondansetron|maropitant|metoclopram|antiemet/],
-    ['analgésico / dor', /tramadol|dipirona|analges|dor\b/],
-    ['antibiótico', /amoxicil|clavulan|antibiot/],
-    ['protetor gástrico', /omeprazol|pantoprazol|sucralfat|protetor/],
-  ];
-  for (const [label, pattern] of pairs) {
-    if (pattern.test(treatment) && !pattern.test(medBlob)) {
-      missing.push(label);
-    }
+  const byTarget = new Map<AdviceStep, AuditIssue[]>();
+  for (const issue of issues) {
+    const list = byTarget.get(issue.target) || [];
+    list.push(issue);
+    byTarget.set(issue.target, list);
   }
-
-  const anamnesis = fold(symptoms);
-  const diagnosis = fold(draft.diagnosis);
-  const vaxInAnamnesis = /vacin/.test(anamnesis);
-  const vaxInvented = /vacin/.test(diagnosis) && !vaxInAnamnesis;
-  const vaxOn = vaxInAnamnesis && /em dia|atualizad|completo/.test(anamnesis);
-  const parvoUp = /parvov/.test(diagnosis);
-  const closedEndocrine = /hipotireoid|hiperadreno|cushing|mucocele/.test(fold(draft.diagnosis));
-  const confirmed = /tt4|t4 livre|estimulacao|estimulação|ultrassom|us abdominal/.test(fold(`${draft.examFindings || ''} ${symptoms}`));
-  const caseBlob = fold(`${symptoms} ${draft.diagnosis} ${draft.treatment}`);
-  const hospitalMed = /butorfanol|torbugesic|cerenia|maropitant|solucao injetavel|via subcut/.test(medBlob);
-  const admitted = /internad|choque|incoercivel|uti/.test(fold(symptoms));
-  const emesisStopped = /eme[sz]e|vomit/.test(fold(symptoms)) && /parou|cessou|nao teve mais|nao vomitou mais/.test(fold(symptoms));
-  const standingAntiemetic = /maropitant|cerenia|ondansetron|vonau/.test(medBlob) && !/sos|se recidiv|se voltar|se apresentar|condicional/.test(medBlob);
-  const pyometra = /piometra|secrecao vulvar|descarga vulvar|infeccao uterina/.test(caseBlob);
-  const gastritis = /gastrite|irritacao gastrica/.test(caseBlob) && !pyometra;
-  const rigidAbdomen = /abdome rigido|abdomen rigido|rigidez abdominal|colica/.test(caseBlob);
-  const outpatient = !admitted && !pyometra;
-  const examList = fold((draft.suggestedExams || []).join(' '));
-  const abdominalGi = /abdome|abdomen|gastrite|pancreat|eme[sz]e|vomit|corpo estranho/.test(caseBlob);
-
-  return [
-    'CHECAGEM OBRIGATÓRIA DO CHEFE — corrija no JSON, não comente:',
-    `- Objetivos na lista: ${objectives.join(' | ') || '(vazia)'}`,
-    duplicates.length ? `- DUPLICATA DE OBJETIVO: ${duplicates.join(', ')}. Fique com UM por objetivo.` : '- Objetivos: sem duplicata óbvia.',
-    missing.length ? `- TREATMENT pediu e a lista NÃO tem: ${missing.join(', ')}. INCLUA a primeira linha ORAL.` : '- Treatment vs lista: sem buraco óbvio de fluido/êmese/dor/antibiótico.',
-    vaxInvented
-      ? '- INVENTOU VACINA: o laudo cita vacinação em dia/histórico vacinal e a anamnese NÃO falou disso. APAGUE essa frase. Não exclua infecção por vacina fictícia.'
-      : vaxOn && parvoUp
-        ? '- ANAMNESE: vacinas em dia e ainda há parvovirose no topo. REBAIXE ou TROQUE.'
-        : '- Anamnese vs laudo: só o que o tutor disse. Sem fato inventado.',
-    closedEndocrine && !confirmed
-      ? '- LAUDO: diagnosis fechou endocrinopatia/mucocele sem TT4/stimulação/US. Volte ao achado (ex.: hiperlipidemia mista) e deixe a etiologia só como "pode ser".'
-      : '- Laudo vs evidência: conferir magnitude (leve ≠ significativo).',
-    outpatient && hospitalMed
-      ? '- RECEITA: injetável de hospital (Cerenia/Butorfanol/Torbugesic) em paciente ambulatorial. TROQUE por oral (dipirona, omeprazol, simeticona, ondansetrona SOS).'
-      : '- Via da receita: conferir se é o que o tutor leva para casa.',
-    emesisStopped && standingAntiemetic
-      ? '- ÊMESE JÁ CESSOU: tire antiemético contínuo. Deixe ondansetrona SOS se recidivar.'
-      : '- Antiemético vs anamnese: conferir.',
-    gastritis && !/omeprazol|gaviz/.test(medBlob)
-      ? '- GASTRITE sem omeprazol. INCLUA (Gaviz, jejum 30 min).'
-      : '- Gastroproteção: conferir se o caso pede.',
-    rigidAbdomen && !/dipiron/.test(medBlob)
-      ? '- ABDOME RÍGIDO sem dipirona oral. INCLUA gotas. Sem opioide.'
-      : '- Analgesia ambulatorial: conferir.',
-    rigidAbdomen && gastritis && !/simeticon/.test(medBlob)
-      ? '- ABDOME RÍGIDO de gastrite sem simeticona. INCLUA 5 gotas (não 0,5 mL).'
-      : '- Gases: só se for gastrite/cólica, não piometra.',
-    pyometra && !/amoxicil|clavulan|synulox/.test(medBlob)
-      ? '- PIOMETRA SEM ANTIBIÓTICO. INCLUA amoxicilina+clavulanato (Synulox) 12,5–25 mg/kg q 12 h, 10–14 dias. Dinoprost não conta.'
-      : '- Infecção uterina vs antibiótico: conferir.',
-    pyometra && !/tramadol|cronidor/.test(medBlob)
-      ? '- PIOMETRA sem tramadol. INCLUA Cronidor oral para dor visceral (além da dipirona).'
-      : '- Analgesia visceral: conferir se o caso pede.',
-    pyometra && /vomit|eme[sz]e/.test(caseBlob) && !/parou|cessou/.test(anamnesis) && !/maropitant|cerenia/.test(medBlob)
-      ? '- PIOMETRA com vômito agora: INCLUA maropitant 1 mg/kg SC. Ondansetrona SOS não basta.'
-      : '- Antiemético sistêmico: conferir.',
-    `- PESO ${weight} kg. dosage TEM que mostrar: mg/kg × ${weight} = mg totais = gotas/mL/fração.`,
-    /omeprazol/.test(medBlob) && /1 comprimido|10 mg total/.test(medBlob) && weight < 8
-      ? `- OMEPRAZOL: 1 comprimido de 10 mg em ${weight} kg passa de 1,5 mg/kg (teto Bretas). Vire ${weight} mg = ${weight}/10 do comprimido de 10 mg.`
-      : '- Omeprazol vs peso: conferir.',
-    /ondansetron|vonau/.test(medBlob) && /comprimido de 4/.test(medBlob)
-      ? `- ONDANSETRONA: comprimido de 4 mg não fecha a conta de ${weight} kg. Use Vonau 5 mg/mL: ${weight} × 0,5 mg = ${weight * 0.5} mg = ${(weight * 0.5) / 5} mL SOS.`
-      : '- Ondansetrona vs peso: conferir.',
-    /simeticon/.test(medBlob) && /0,\s*5 ml|0\.5 ml/.test(medBlob)
-      ? '- SIMETICONA: troque mL inventado por 5 gotas VO.'
-      : '- Simeticona: 5 gotas se o caso pede.',
-    abdominalGi && !/hemograma/.test(examList)
-      ? '- EXAMES: faltou hemograma.'
-      : '- Hemograma: conferir se o caso pede.',
-    abdominalGi && !/bioquim|ureia|creatin/.test(examList)
-      ? '- EXAMES: faltou bioquímica (ALT, FA, ureia, creatinina, proteínas e frações).'
-      : '- Bioquímica: conferir se o caso pede.',
-    abdominalGi && !pyometra && !/cpli|lipase pancreat/.test(examList)
-      ? '- EXAMES: faltou cPLI. INCLUA para confirmar ou afastar pancreatite.'
-      : '- cPLI: conferir se o quadro é gastrite/pâncreas (não piometra).',
-    abdominalGi && !/ultrassom|ultrasson/.test(examList)
-      ? '- EXAMES: faltou US abdominal.'
-      : '- US: conferir.',
-    /raio-?x|radiograf/.test(anamnesis) && !/raio-?x|radiograf/.test(examList)
-      ? '- EXAMES: a anamnese já pediu raio-x. INCLUA com "já solicitada".'
-      : '- Raio-x: se já foi pedido, tem que aparecer na lista.',
-  ].join('\n');
+  const lines = ['RELATÓRIO DO CHEFE — cada problema pertence a um especialista. Corrija o campo correspondente:'];
+  for (const [target, list] of byTarget) {
+    lines.push(`[${OWNER_LABEL[target] || target.toUpperCase()}]`);
+    for (const issue of list) lines.push(`  - ${issue.note}`);
+  }
+  return lines.join('\n');
 }
 
 export const validatorSpecialist: Specialist = {
   id: 'validate',
   label: 'Validação',
-  detail: 'Chefe: não deixa brecha',
+  detail: 'Chefe: revisa consulta e corrige',
   attachExams: false,
   buildPrompts({ patient, symptoms, examsNote, draft, fixNote }) {
     return {
-      systemInstruction: `Você é o veterinário CHEFE. Não é revisor de texto: é o clínico que pega o prontuário e CORRIGE antes de assinar. Demore no raciocínio. Achou brecha, ALTERE o campo. Devolver igual quando está errado é falha.
+      systemInstruction: `Você é o veterinário CHEFE que assina o prontuário. Não é revisor de texto: é o clínico que reabre o caso, CONSULTA as fontes e CORRIGE antes de assinar. Pode demorar. Devolver um prontuário errado igual é falha grave.
 
-Consulte TODAS as fontes:
+Você tem todas as fontes. USE-AS para conferir cada decisão:
 ${listSources()}
 
-Checklist — execute um a um e corrija:
-1. Anamnese na risca. Se o laudo cita vacina, dieta, viagem ou exame que o tutor NÃO disse, APAGUE. Vacinas em dia só valem se a anamnese escreveu isso — aí parvo/cinomose não são o diagnóstico.
-2. Sexo: apague hipótese anatomicamente impossível.
-3. diagnosis é o que está DEMONSTRADO (achado/síndrome). Etiologia sem TT4/stimulação/US só como "pode ser" no laudo, sem fechar.
-4. Magnitude do laboratório: leve não vira "significativa" nem "critérios preenchidos".
-5. treatment é a conduta de HOJE (pilar + como fazer + tutor). Sem "plano visa", sem investigar etiologia, sem TT4/US no texto. Sem adjuvante inventado se o pilar é dieta.
-6. medications: apresentação + mg/kg + conta deste peso. Um por objetivo. Sem Unasyn. Cerenia injetável só se vômito agora, febre/piometra ou pré-cirurgia — não em gastrite leve.
-7. Infecção/piometra = antibiótico (Synulox) obrigatório; dinoprost não substitui. Dor+febre = dipirona e tramadol. Gastrite leve = omeprazol + simeticona + ondansetrona SOS. Conduta só nutricional: []. Não invente TCM.
-8. Dose × peso deste paciente. Mostre a conta. Não arredonde comprimido para cima se passar do teto. Dipirona 25 mg/kg, 1 gota = 25 mg. Omeprazol 1 mg/kg (não 10 mg fixos). Ondansetrona caseira: 0,5 mg/kg no Vonau 5 mg/mL. Sem citar livro no texto.
-9. suggestedExams: nome + o que responde. Abdome/gastrite/êmese: hemograma, bioquímica completa, cPLI, US e raio-x. O que a anamnese já pediu entra com "já solicitada". Sem ensaio de livro em cada item.
-10. Sem citar livro, autor ou página em diagnosis, treatment, medications ou suggestedExams. sources deve ser [].
+RACIOCÍNIO OBRIGATÓRIO (serve para qualquer caso — não decore doença):
+1. ANAMNESE: releia o que o tutor disse. Liste mentalmente os fatos. O laudo, a conduta e a lista só podem usar ESSES fatos + os exames anexados. Qualquer história inventada (vacina, viagem, trauma, gestação, dieta) que a anamnese não trouxe: APAGUE.
+2. SEXO/ESPÉCIE: apague hipótese anatomicamente impossível.
+3. DIAGNÓSTICO: é o que está demonstrado (achado/síndrome). Etiologia que exigiria exame ainda não feito fica como possibilidade ("pode ser"), não como diagnóstico fechado. Magnitude fiel (leve ≠ significativo).
+4. PROBLEMAS → OBJETIVOS: a partir do diagnóstico, derive os objetivos terapêuticos que o caso EXIGE, consultando as fontes. Princípios que valem sempre:
+   - DUAS falhas são inaceitáveis e você tem que caçar ativamente: (a) caso com DOR/FEBRE sem analgésico/antitérmico; (b) caso com sinal de INFECÇÃO/processo bacteriano (secreção purulenta/fétida, pus, abscesso, supuração, sepse, febre com foco, cultura positiva, etiologia bacteriana) SEM antimicrobiano. Processo infeccioso EXIGE antibiótico de primeira linha — hormônio, prostaglandina ou sintomático não substituem. Se faltar, INCLUA.
+   - Vômito ativo → antiemético sistêmico; vômito cessado → antiemético SOS. Desidratação/choque → fluido pela via adequada.
+   - Condição cirúrgica → registre o encaminhamento cirúrgico.
+   Se o diagnóstico exige um objetivo que a conduta OU a lista não cobriu, INCLUA. Se há item sem objetivo real, remova.
+5. VIA e CONTEXTO: paciente estável que vai para casa recebe prescrição oral; instável/internado/pré-cirúrgico pode receber injetável. Case a via ao estado descrito.
+6. DOSE: para cada fármaco, confirme mg/kg (ou UI/kg) da fonte para a espécie e recalcule pelo peso deste paciente, mostrando a conta e a apresentação. Não arredonde acima do teto.
+7. UM fármaco por objetivo. Sem Unasyn, sem dois antibióticos sobrepostos, sem dois soros. Dois analgésicos de classes diferentes são permitidos quando a dor justifica.
+8. EXAMES: cada um diz o que confirma/afasta. O que a anamnese já pediu entra marcado como "já solicitada". Complete o que o diagnóstico exige para fechar ou descartar as hipóteses.
+9. TEXTO: sem citar livro, autor ou página em nenhum campo. sources = [].
 
-Responda APENAS JSON completo já corrigido: diagnosis, treatment, medications, suggestedExams, sources.`,
+Corrija DE VERDADE: reescreva os campos. Responda APENAS JSON completo e já corrigido: diagnosis, treatment, medications, suggestedExams, sources.`,
       userPrompt: `${patientBlock(patient, symptoms, examsNote)}
 
-${validationBrief(draft, symptoms, patient.weight)}
+${validationBrief(draft, symptoms)}
 
-RASCUNHO
+RASCUNHO A VALIDAR
 ${JSON.stringify(draft)}
 
-Assine só depois de corrigir. Se houver dois itens com o mesmo objetivo, a resposta ainda está errada.${fixNote ? `
+Reabra o caso, confronte com as fontes e assine só depois de corrigir cada brecha acima e as que você mesmo encontrar.${fixNote ? `
 
-CORREÇÃO — o rascunho ainda tem este erro. ALTERE o campo, não assine igual:
+AINDA PENDENTE — corrija antes de assinar:
 ${fixNote}` : ''}`,
     };
   },
   review(result: DiagnosisResult, symptoms: string) {
     const issues: string[] = [];
-    if (/vacin/i.test(result.diagnosis) && !/vacin/i.test(symptoms)) {
-      issues.push('O laudo ainda cita vacina/vacinação e a anamnese não falou disso. APAGUE essa frase do diagnosis.');
+    const diagnosis = fold(result.diagnosis);
+    const anamnesis = fold(symptoms);
+    if (/vacin/.test(diagnosis) && !/vacin/.test(anamnesis)) {
+      issues.push('O laudo ainda cita vacinação e a anamnese não falou disso. APAGUE do diagnosis.');
     }
-    const clinical = fold(`${symptoms} ${result.diagnosis}`);
-    const examList = fold((result.suggestedExams || []).join(' '));
-    const abdominalGi = /abdome|abdomen|gastrite|pancreat|eme[sz]e|vomit|corpo estranho/.test(clinical);
-    const meds = fold(result.medications.map((item) => `${item.name} ${item.forDiagnosis || ''}`).join(' '));
-    if (/piometra|secrecao vulvar|infeccao uterina/.test(clinical) && !/amoxicil|clavulan|synulox/.test(meds)) {
-      issues.push('Piometra ainda sem amoxicilina+clavulanato. INCLUA Synulox. Dinoprost não conta como antibiótico.');
-    }
-    if (abdominalGi && !/piometra|vulvar/.test(clinical) && !/cpli|lipase pancreat/.test(examList)) {
-      issues.push('suggestedExams ainda sem cPLI. INCLUA lipase pancreática específica para pancreatite.');
-    }
-    if (/raio-?x|radiograf/.test(fold(symptoms)) && !/raio-?x|radiograf/.test(examList)) {
-      issues.push('A anamnese já pediu raio-x. INCLUA em suggestedExams com já solicitada.');
+    const leaked = [result.diagnosis, result.treatment, ...(result.suggestedExams || [])]
+      .some((t) => BOOK_NAMES.test(fold(t)));
+    if (leaked) {
+      issues.push('Ainda há nome de livro/autor no texto. Remova de todos os campos.');
     }
     return issues;
   },
