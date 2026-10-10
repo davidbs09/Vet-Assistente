@@ -1,4 +1,4 @@
-import type { DiagnosisResult } from '../services/geminiService';
+import type { DiagnosisResult } from '../ai';
 
 export type PatientSex = 'male' | 'female';
 

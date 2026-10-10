@@ -38,9 +38,17 @@
                     "purpose": "Aprofundamento em patologias complexas, distúrbios multissistêmicos e terapia intensiva."
                },
                {
+                    "id": "JERICO",
+                    "title": "Tratado de Medicina Interna de Cães e Gatos",
+                    "authors": "Márcia Marques Jericó, João Pedro de Andrade Neto & Márcia Mery Kogika",
+                    "purpose": "Tratado brasileiro de medicina interna: fisiopatologia, diferenciais, exames e condutas da rotina e da complexidade clínica de cães e gatos."
+               },
+               {
                     "id": "MERCK_VET",
-                    "title": "Manual Merck de Veterinária (The Merck Veterinary Manual)",
-                    "purpose": "Consenso rápido, epidemiologia, etiopatogenia e critérios diagnósticos objetivos."
+                    "title": "Manual Elsevier de Veterinária — Diagnóstico e tratamento de cães e gatos",
+                    "authors": "Robert Moraillon, Yves Legeay, Didier Boussarie & Odile Sénécat",
+                    "edition": "7ª edição",
+                    "purpose": "Consulta alfabética de diagnóstico e tratamento: definição, sintomas, exames e conduta da rotina de cães e gatos."
                },
                {
                     "id": "CRIVELLENTI",
@@ -50,19 +58,17 @@
                },
                {
                     "id": "SAUNDERS_SHERDING",
-                    "title": "Manual Saunders - Clínica de Pequenos Animais",
+                    "title": "Manual Saunders — Terapia Veterinária de Pequenos Animais",
                     "authors": "Stephen J. Birchard & Robert G. Sherding",
-                    "purpose": "Abordagem clínica direta, sinais cardinais, emergências e procedimentos ambulatoriais."
+                    "purpose": "Bulário de terapia: farmacologia, indicações, contraindicações, monitoramento e posologia de pequenos animais."
                },
                {
                     "id": "BRETAS_VIANA",
                     "title": "Guia Terapêutico Veterinário",
                     "authors": "Fernando Antônio Bretas Viana",
-                    "edition": "3ª edição",
-                    "year": 2014,
+                    "edition": "4ª edição",
                     "publisher": "Gráfica e Editora CEM",
-                    "pages": 560,
-                    "purpose": "FONTE-MESA de consulta rápida da rotina brasileira: doses por espécie, apresentações comerciais e prescrição prática. Cruze sempre com a monografia vigente do VetSmart e do AlfaVet — o guia é a 3ª ed. (2014)."
+                    "purpose": "FONTE-MESA de consulta rápida da rotina brasileira: doses por espécie, apresentações comerciais e prescrição prática. Cruze sempre com a monografia vigente do VetSmart e do AlfaVet — o guia em uso é a 4ª ed."
                },
                {
                     "id": "VETSMART",
@@ -84,15 +90,15 @@
                     "Classificar a GRAVIDADE do caso antes de prescrever: leve | moderado | moderado a grave | gravíssimo. Essa classificação define via (oral vs injetável) e se entra antibiótico de primeira linha."
                ],
                "source_consultation_protocol": [
-                    "Trabalhe como se os 6 livros e os 2 sistemas (VetSmart e AlfaVet) estivessem abertos. É proibido responder com 'conhecimento geral' ou protocolo de plantão antigo. Cada conduta diagnóstica deve ser a que o livro aplicaria NESTE quadro; cada medicamento deve ser o que a monografia atual do VetSmart/AlfaVet mostra para a espécie, cruzada com o Guia Terapêutico de Bretas Viana.",
+                    "Trabalhe como se os livros obrigatórios e os 2 sistemas (VetSmart e AlfaVet) estivessem abertos. É proibido responder com 'conhecimento geral' ou protocolo de plantão antigo. Cada conduta diagnóstica deve ser a que o livro aplicaria NESTE quadro; cada medicamento deve ser o que a monografia atual do VetSmart/AlfaVet mostra para a espécie, cruzada com o Guia Terapêutico de Bretas Viana.",
                     "Nelson & Couto: extraia fisiopatologia, critérios diagnósticos e o protocolo terapêutico do capítulo da doença suspeita (não um resumo vago de 'suporte').",
                     "Ettinger: use para quadros complexos, multissistêmicos, UTI e quando o Nelson for insuficiente no detalhe da doença.",
-                    "Merck: use critérios objetivos, epidemiologia e definição da entidade (o que confirma, o que exclui).",
+                    "Elsevier/Moraillon: use a ficha alfabética da doença (definição, sintomas, o que confirma no diagnóstico e a conduta do tópico).",
                     "Crivellenti: use a casuística e o fluxograma da ROTINA BRASILEIRA — o que o clínico vê no ambulatório daqui, ordem de hipóteses e exames de primeira linha no Brasil.",
-                    "Saunders/Sherding: sinais cardinais, emergência e procedimento prático (o que fazer na mesa agora).",
-                    "Bretas Viana — Guia Terapêutico Veterinário (3ª ed., 2014, Editora CEM): consulta rápida de dose, via e apresentação comercial da rotina brasileira. Cite [Bretas Viana]. Confirme o fármaco vigente no VetSmart/AlfaVet antes de fechar a prescrição.",
+                    "Saunders: use a monografia do fármaco (indicação, contraindicação, monitoramento e posologia de pequenos animais).",
+                    "Bretas Viana — Guia Terapêutico Veterinário (4ª ed., Editora CEM): consulta rápida de dose, via e apresentação comercial da rotina brasileira. Cite [Bretas Viana]. Confirme o fármaco vigente no VetSmart/AlfaVet antes de fechar a prescrição.",
                     "VetSmart + AlfaVet (obrigatório em TODO fármaco): (1) escolher o princípio de primeira linha mais usado hoje na indicação; (2) ler dose em mg/kg, via e intervalo da monografia atual; (3) escolher apresentação comercial brasileira vigente (comprimido ou líquido, injetável só se êmese incoercível); (4) cruzar com o Bretas Viana e calcular mg ou mL para o peso informado. Se as fontes divergirem, declare e fique com a posologia veterinária mais conservadora e vigente.",
-                    "No array 'sources', cite as 8 fontes com o TEMA consultado (ex.: 'VetSmart — monografia Amoxicilina+Clavulanato, cão, VO'). Não invente número de página.",
+                    "No array 'sources', cite as fontes obrigatórias com o TEMA consultado (ex.: 'VetSmart — monografia Amoxicilina+Clavulanato, cão, VO'). Não invente número de página.",
                     "Quando citar protocolo de autor ou tratado renomado no texto de diagnosis/treatment, mantenha a referência entre colchetes, por exemplo [Nelson & Couto], [Saunders], [Ettinger], [Crivellenti], [Bretas Viana]. Não apague essas citações."
                ],
                "pharmacology_and_dosage_rules": [
@@ -146,7 +152,7 @@
                "O campo 'treatment' descreve a conduta global até a recuperação e como desvendar qual hipótese é o problema real. Citações em colchetes [Nelson & Couto] [Saunders]. Sem relatório de UTI.",
                "O campo 'medications' transcreve a farmacologia do treatment, com forDiagnosis = objetivo da conduta. Sem teto de 3. Não é um por hipótese. Sem Unasyn. Sem dois soros. Diarreia + antibiótico: um probiótico VO.",
                "O campo 'suggestedExams' lista exames que separam as hipóteses, dizendo o que cada um confirma ou torna menos provável.",
-               "O campo 'sources' deve listar as 8 fontes com o tema realmente consultado (capítulo/monografia), incluindo Bretas Viana, VetSmart e AlfaVet para cada fármaco prescrito."
+               "O campo 'sources' deve listar as fontes obrigatórias com o tema realmente consultado (capítulo/monografia), incluindo Bretas Viana, VetSmart e AlfaVet para cada fármaco prescrito."
           ]
      },
      "json_output_schema": {
@@ -226,7 +232,7 @@
                },
                "sources": {
                     "type": "array",
-                    "description": "As 8 fontes com o tema consultado. Bretas Viana, VetSmart e AlfaVet devem aparecer com a monografia de cada fármaco prescrito.",
+                    "description": "As fontes obrigatórias com o tema consultado. Bretas Viana, VetSmart e AlfaVet devem aparecer com a monografia de cada fármaco prescrito.",
                     "items": {
                          "type": "string"
                     }

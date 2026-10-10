@@ -8,3 +8,10 @@ coverage/
 !.env.example
 
 secret/
+src/ai/*.pdf
+src/ai/knowledge/*.pdf
+src/ai/knowledge/*.json
+src/ai/knowledge/_*.txt
+src/ai/knowledge/*.raw.txt
+
+/scripts

@@ -145,7 +145,7 @@ async function handleRequestAccess(req: IncomingMessage, res: ServerResponse, en
   const crmv = typeof body.crmv === 'string' ? body.crmv.trim() : '';
   const contato = normalizePhone(typeof body.contato === 'string' ? body.contato : '');
   const passwordError = validateNewPassword(body.password);
-  const adminEmail = String(env.VITE_ADMIN_EMAIL || 'admin@vetassistente.local').trim().toLowerCase();
+  const adminEmail = String(env.VITE_ADMIN_EMAIL || 'vetassistentai@gmail.com').trim().toLowerCase();
 
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     sendJson(res, 400, {error: 'Informe um e-mail válido.'});

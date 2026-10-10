@@ -3,7 +3,7 @@ import { AlertCircle, CheckCircle2, ClipboardList, Loader2, Mic, Save, Square, U
 import { motion } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import { auth, db, addDoc, collection, Timestamp } from '../firebase';
-import { getVeterinaryAdvice, DiagnosisResult } from '../services/geminiService';
+import { generateClinicalReport, pipelineStepsFor, type AdviceStep, type DiagnosisResult } from '../ai';
 import { assertActiveAccess, logoutFromAuth, mapAuthError } from '../services/authService';
 import { cn } from '../lib/cn';
 import { createBrowserSpeechRecognition, isBrowserSpeechSupported } from '../lib/speechToText';
@@ -14,6 +14,7 @@ import AiClinicalDisclaimer from './clinical/AiClinicalDisclaimer';
 export default function NewConsultationView({ patient, onBack, onComplete }: { patient: Patient, onBack: () => void, onComplete: (c: Consultation) => void }) {
   const [symptoms, setSymptoms] = useState('');
   const [loading, setLoading] = useState(false);
+  const [pipelineStep, setPipelineStep] = useState<AdviceStep | null>(null);
   const [diagnoseError, setDiagnoseError] = useState('');
   const [result, setResult] = useState<DiagnosisResult | null>(null);
   const [exams, setExams] = useState<{ data: string; mimeType: string; name: string }[]>([]);
@@ -128,11 +129,13 @@ export default function NewConsultationView({ patient, onBack, onComplete }: { p
     }
     setDiagnoseError('');
     setLoading(true);
+    setPipelineStep(exams.length > 0 ? 'documents' : 'diagnosis');
     try {
-      const advice = await getVeterinaryAdvice(
+      const advice = await generateClinicalReport(
         { species: patient.species, breed: patient.breed, weight: patient.weight, sex: patient.sex },
         symptoms,
-        exams
+        exams,
+        (progress) => setPipelineStep(progress.step),
       );
       setResult(advice);
     } catch (error) {
@@ -142,6 +145,7 @@ export default function NewConsultationView({ patient, onBack, onComplete }: { p
       alert(message);
     } finally {
       setLoading(false);
+      setPipelineStep(null);
     }
   };
 
@@ -261,7 +265,7 @@ export default function NewConsultationView({ patient, onBack, onComplete }: { p
                 {loading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Gerando relatório (pode levar até 1 minuto)...
+                    Gerando relatório em etapas...
                   </>
                 ) : (
                   <>
@@ -270,6 +274,30 @@ export default function NewConsultationView({ patient, onBack, onComplete }: { p
                   </>
                 )}
               </Button>
+              {loading && (
+                <ol className="space-y-2 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm">
+                  {pipelineStepsFor(exams.length > 0).map((step, index, steps) => {
+                    const currentIndex = steps.findIndex((item) => item.id === pipelineStep);
+                    const done = currentIndex > index;
+                    const active = step.id === pipelineStep;
+                    return (
+                      <li key={step.id} className={cn('flex items-start gap-2', active ? 'text-emerald-800' : done ? 'text-slate-700' : 'text-slate-400')}>
+                        {done ? (
+                          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                        ) : active ? (
+                          <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-emerald-600" />
+                        ) : (
+                          <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center text-[11px] font-semibold">{index + 1}</span>
+                        )}
+                        <span>
+                          <span className="font-medium">{step.label}</span>
+                          <span className="block text-xs text-slate-500">{step.detail}</span>
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ol>
+              )}
             </div>
           </div>
         </div>
@@ -288,32 +316,13 @@ export default function NewConsultationView({ patient, onBack, onComplete }: { p
               
               <div className="mt-6 space-y-6">
                 <div>
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Diagnóstico Mais Provável</h4>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Diagnóstico Provável</h4>
                   <p className="mt-1 text-lg font-bold text-slate-900">{result.diagnosis}</p>
                 </div>
 
-                {result.differentials && result.differentials.length > 0 && (
-                  <div>
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Diagnósticos Diferenciais</h4>
-                    <div className="mt-2 space-y-3">
-                      {result.differentials.map((diff, i) => (
-                        <div key={i} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                          <div className="flex flex-wrap items-baseline justify-between gap-2">
-                            <p className="font-bold text-slate-900">{i + 1}. {diff.disease}</p>
-                            <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">
-                              {diff.likelihood}
-                            </span>
-                          </div>
-                          <p className="mt-2 text-sm leading-relaxed text-slate-600">{diff.reasoning}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
                 <div>
                   <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Tratamento e esclarecimento</h4>
-                  <p className="mt-1 text-xs text-slate-500">Conduta até a recuperação e o que fazer para descobrir qual hipótese é o problema real.</p>
+                  <p className="mt-1 text-xs text-slate-500">Conduta até a recuperação.</p>
                   <div className="prose prose-sm mt-2 text-slate-700">
                     <ReactMarkdown>{result.treatment}</ReactMarkdown>
                   </div>
@@ -321,7 +330,7 @@ export default function NewConsultationView({ patient, onBack, onComplete }: { p
 
                 <div>
                   <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Medicamentos da conduta ({patient.weight}kg)</h4>
-                  <p className="mt-1 text-xs text-slate-500">Tudo que o tratamento pediu, com dose — sem limitar a um por hipótese.</p>
+                  <p className="mt-1 text-xs text-slate-500">Tudo que o tratamento pediu, com dose.</p>
                   <div className="mt-2 space-y-3">
                     {(result.medications ?? []).map((med, i) => (
                       <div key={i} className="rounded-xl border border-emerald-100 bg-white p-4 shadow-sm">

@@ -11,7 +11,7 @@ export const SUPPORT_CONTACTS = {
   },
   email: {
     label: 'E-mail',
-    value: 'atendimento@ajudavoce.com.br',
-    href: 'mailto:atendimento@ajudavoce.com.br',
+    value: 'vetassistentai@gmail.com',
+    href: 'mailto:vetassistentai@gmail.com',
   },
 } as const;

@@ -71,7 +71,7 @@ export interface RegisterPayload {
 }
 
 const env = (import.meta as any).env || {};
-const adminEmail = String(env.VITE_ADMIN_EMAIL || 'admin@vetassistente.local')
+const adminEmail = String(env.VITE_ADMIN_EMAIL || 'vetassistentai@gmail.com')
   .trim()
   .toLowerCase();
 const adminUsername = String(env.VITE_ADMIN_USERNAME || 'admin').trim().toLowerCase();

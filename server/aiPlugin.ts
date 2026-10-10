@@ -3,67 +3,93 @@ import type {IncomingMessage, ServerResponse} from 'http';
 import type {Plugin, ViteDevServer} from 'vite';
 import {AI_CONFIG} from '../src/shared/aiConfig';
 import instructions from '../src/services/instructions.json';
+import {withBookSlices} from './bookKnowledge';
 
 type EnvMap = Record<string, string | undefined>;
 
 const BODY_LIMIT = 16 * 1024 * 1024;
 
-const diagnosisOutputSchema = {
-  type: 'object',
-  additionalProperties: false,
-  required: ['diagnosis', 'differentials', 'treatment', 'medications', 'suggestedExams', 'sources'],
-  properties: {
-    diagnosis: {
-      type: 'string',
-      description: instructions.json_output_schema.properties.diagnosis.description,
-    },
-    differentials: {
-      type: 'array',
-      minItems: 3,
-      description: instructions.json_output_schema.properties.differentials.description,
-      items: {
-        type: 'object',
-        additionalProperties: false,
-        required: ['disease', 'likelihood', 'reasoning'],
-        properties: {
-          disease: {type: 'string', description: instructions.json_output_schema.properties.differentials.items.properties.disease.description},
-          likelihood: {type: 'string', description: instructions.json_output_schema.properties.differentials.items.properties.likelihood.description},
-          reasoning: {type: 'string', description: instructions.json_output_schema.properties.differentials.items.properties.reasoning.description},
-        },
+type AdviceStep = 'documents' | 'diagnosis' | 'treatment' | 'medications' | 'exams' | 'validate';
+
+const schemaProps = {
+  diagnosis: {
+    type: 'string',
+    description: instructions.json_output_schema.properties.diagnosis.description,
+  },
+  differentials: {
+    type: 'array',
+    minItems: 3,
+    description: instructions.json_output_schema.properties.differentials.description,
+    items: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['disease', 'likelihood', 'reasoning'],
+      properties: {
+        disease: {type: 'string', description: instructions.json_output_schema.properties.differentials.items.properties.disease.description},
+        likelihood: {type: 'string', description: instructions.json_output_schema.properties.differentials.items.properties.likelihood.description},
+        reasoning: {type: 'string', description: instructions.json_output_schema.properties.differentials.items.properties.reasoning.description},
       },
-    },
-    treatment: {
-      type: 'string',
-      description: instructions.json_output_schema.properties.treatment.description,
-    },
-    medications: {
-      type: 'array',
-      description: instructions.json_output_schema.properties.medications.description,
-      items: {
-        type: 'object',
-        additionalProperties: false,
-        required: ['name', 'dosage', 'frequency', 'duration', 'forDiagnosis'],
-        properties: {
-          name: {type: 'string', description: instructions.json_output_schema.properties.medications.items.properties.name.description},
-          dosage: {type: 'string', description: instructions.json_output_schema.properties.medications.items.properties.dosage.description},
-          frequency: {type: 'string', description: instructions.json_output_schema.properties.medications.items.properties.frequency.description},
-          duration: {type: 'string', description: instructions.json_output_schema.properties.medications.items.properties.duration.description},
-          forDiagnosis: {type: 'string', description: instructions.json_output_schema.properties.medications.items.properties.forDiagnosis.description},
-        },
-      },
-    },
-    suggestedExams: {
-      type: 'array',
-      description: instructions.json_output_schema.properties.suggestedExams.description,
-      items: {type: 'string'},
-    },
-    sources: {
-      type: 'array',
-      description: instructions.json_output_schema.properties.sources.description,
-      items: {type: 'string'},
     },
   },
-};
+  treatment: {
+    type: 'string',
+    description: instructions.json_output_schema.properties.treatment.description,
+  },
+  medications: {
+    type: 'array',
+    minItems: 1,
+    description: instructions.json_output_schema.properties.medications.description,
+    items: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['name', 'dosage', 'frequency', 'duration'],
+      properties: {
+        name: {type: 'string', description: instructions.json_output_schema.properties.medications.items.properties.name.description},
+        dosage: {type: 'string', description: instructions.json_output_schema.properties.medications.items.properties.dosage.description},
+        frequency: {type: 'string', description: instructions.json_output_schema.properties.medications.items.properties.frequency.description},
+        duration: {type: 'string', description: instructions.json_output_schema.properties.medications.items.properties.duration.description},
+        forDiagnosis: {type: 'string', description: instructions.json_output_schema.properties.medications.items.properties.forDiagnosis.description},
+      },
+    },
+  },
+  suggestedExams: {
+    type: 'array',
+    description: instructions.json_output_schema.properties.suggestedExams.description,
+    items: {type: 'string'},
+  },
+  sources: {
+    type: 'array',
+    description: instructions.json_output_schema.properties.sources.description,
+    items: {type: 'string'},
+  },
+  examFindings: {
+    type: 'string',
+    description: 'Leitura objetiva dos documentos anexados: tipo de exame, valores, alterações e o que está ilegível. Sem diagnóstico e sem prescrição.',
+  },
+} as const;
+
+function schemaForStep(step: AdviceStep) {
+  const pick = (keys: Array<keyof typeof schemaProps>) => ({
+    type: 'object',
+    additionalProperties: false,
+    required: keys,
+    properties: Object.fromEntries(keys.map((key) => [key, schemaProps[key]])),
+  });
+
+  if (step === 'documents') return pick(['examFindings']);
+  if (step === 'diagnosis') return pick(['diagnosis', 'sources']);
+  if (step === 'treatment') return pick(['treatment', 'sources']);
+  if (step === 'medications') return pick(['medications', 'sources']);
+  if (step === 'exams') return pick(['suggestedExams', 'sources']);
+  return pick(['diagnosis', 'treatment', 'medications', 'suggestedExams', 'sources']);
+}
+
+function parseAdviceStep(value: unknown): AdviceStep {
+  if (value === 'documents' || value === 'diagnosis' || value === 'treatment' || value === 'medications' || value === 'exams' || value === 'validate') {
+    return value;
+  }
+  return 'validate';
+}
 
 function readApiKey(env: EnvMap): string {
   for (const name of AI_CONFIG.apiKeyEnv) {
@@ -186,6 +212,7 @@ async function generateText(
   systemInstruction: string,
   parts: Array<{text: string} | {inlineData: {mimeType: string; data: string}}>,
   withSchema: boolean,
+  step: AdviceStep,
 ): Promise<string> {
   const client = createClient(env);
   const response = await client.models.generateContent({
@@ -197,7 +224,7 @@ async function generateText(
       topP: AI_CONFIG.topP,
       maxOutputTokens: AI_CONFIG.maxOutputTokens,
       responseMimeType: 'application/json',
-      ...(withSchema ? {responseSchema: diagnosisOutputSchema} : {}),
+      ...(withSchema ? {responseSchema: schemaForStep(step)} : {}),
     },
   });
   return responseText(response);
@@ -205,11 +232,14 @@ async function generateText(
 
 async function handleAdvice(req: IncomingMessage, res: ServerResponse, env: EnvMap): Promise<void> {
   const body = await readJsonBody(req);
-  const systemInstruction = typeof body.systemInstruction === 'string' ? body.systemInstruction : '';
+  const rawInstruction = typeof body.systemInstruction === 'string' ? body.systemInstruction : '';
   const userPrompt = typeof body.userPrompt === 'string' ? body.userPrompt : '';
+  const knowledgeQuery = typeof body.knowledgeQuery === 'string' ? body.knowledgeQuery : '';
   const exams = Array.isArray(body.exams) ? body.exams as {data: string; mimeType: string}[] : [];
+  const step = parseAdviceStep(body.step);
+  const systemInstruction = withBookSlices(rawInstruction, step, knowledgeQuery);
 
-  if (!systemInstruction || !userPrompt) {
+  if (!rawInstruction || !userPrompt) {
     sendJson(res, 400, {error: 'Prompt clínico incompleto.'});
     return;
   }
@@ -221,13 +251,13 @@ async function handleAdvice(req: IncomingMessage, res: ServerResponse, env: EnvM
 
   let text = '';
   try {
-    text = await generateText(env, systemInstruction, parts, true);
+    text = await generateText(env, systemInstruction, parts, true, step);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (!message.includes('responseSchema') && !message.includes('response_schema')) {
       throw error;
     }
-    text = await generateText(env, systemInstruction, parts, false);
+    text = await generateText(env, systemInstruction, parts, false, step);
   }
 
   if (!text) {
@@ -251,6 +281,7 @@ async function handleTranscribe(req: IncomingMessage, res: ServerResponse, env: 
     'Transcreva o áudio em português do Brasil. Devolva JSON {"text":"..."}.',
     [{inlineData: {mimeType, data: stripBase64(audioBase64)}}, {text: 'Transcreva este áudio.'}],
     false,
+    'validate',
   );
   sendJson(res, 200, {text});
 }

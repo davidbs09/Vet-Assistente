@@ -8,7 +8,13 @@
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "extract:bretas": "python scripts/extract-bretas.py",
+    "extract:crivellenti": "python scripts/extract-crivellenti.py",
+    "extract:nelson": "python scripts/extract-nelson.py",
+    "extract:tratado": "python scripts/extract-tratado.py",
+    "extract:saunders": "python scripts/extract-saunders.py",
+    "extract:elsevier": "python scripts/extract-elsevier.py"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",
