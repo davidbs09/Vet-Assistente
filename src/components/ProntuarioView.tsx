@@ -56,9 +56,9 @@ export default function ProntuarioView({ patient, consultations, onBack }: { pat
               <div class="section-title">Tratamento</div>
               <p>${c.treatment}</p>
               <div class="section-title">Medicamentos</div>
-              <ul>
+              ${c.medications && c.medications.length ? `<ul>
                 ${c.medications.map(m => `<li>${m.name}${m.forDiagnosis ? ` [${m.forDiagnosis}]` : ''}: ${m.dosage} - ${m.frequency} (${m.duration})</li>`).join('')}
-              </ul>
+              </ul>` : '<p>Medicamentos não são necessários neste caso. A conduta é de suporte, sem prescrição farmacológica.</p>'}
             </div>
           `).join('')}
           <div class="footer">
@@ -137,13 +137,15 @@ export default function ProntuarioView({ patient, consultations, onBack }: { pat
                 <div>
                   <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Medicamentos</h4>
                   <div className="mt-3 flex flex-wrap gap-3">
-                    {c.medications.map((med, j) => (
+                    {c.medications && c.medications.length > 0 ? c.medications.map((med, j) => (
                       <div key={j} className="rounded-lg bg-slate-50 p-3 text-xs">
                         <div className="font-bold text-slate-900">{med.name}</div>
                         {med.forDiagnosis && <div className="mt-0.5 text-slate-400">{med.forDiagnosis}</div>}
                         <div className="mt-1 text-slate-500">{med.dosage} • {med.frequency}</div>
                       </div>
-                    ))}
+                    )) : (
+                      <p className="text-sm text-slate-600">Medicamentos não são necessários neste caso. A conduta é de suporte, sem prescrição farmacológica.</p>
+                    )}
                   </div>
                 </div>
               </div>

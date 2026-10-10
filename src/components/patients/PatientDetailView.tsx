@@ -128,11 +128,15 @@ export default function PatientDetailView({
                   <p className="text-sm text-slate-600 line-clamp-2">{consultation.symptoms}</p>
                 </div>
                 <div className="mt-4 flex flex-wrap gap-2">
-                  {consultation.medications.map((med, i) => (
+                  {consultation.medications && consultation.medications.length > 0 ? consultation.medications.map((med, i) => (
                     <span key={i} className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
                       {med.name}
                     </span>
-                  ))}
+                  )) : (
+                    <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">
+                      Sem medicamentos necessários
+                    </span>
+                  )}
                 </div>
               </div>
             ))}

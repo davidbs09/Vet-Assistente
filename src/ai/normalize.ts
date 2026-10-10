@@ -243,9 +243,7 @@ export function emptyResult(): DiagnosisResult {
 
 export function mergeResult(base: DiagnosisResult, next: DiagnosisResult): DiagnosisResult {
   return {
-    diagnosis: next.diagnosis && !(base.diagnosis && next.diagnosis.length + 80 < base.diagnosis.length)
-      ? next.diagnosis
-      : base.diagnosis,
+    diagnosis: next.diagnosis || base.diagnosis,
     differentials: [],
     treatment: next.treatment || base.treatment,
     medications: next.medications.length ? next.medications : base.medications,

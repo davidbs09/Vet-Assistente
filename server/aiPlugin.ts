@@ -37,7 +37,7 @@ const schemaProps = {
   },
   medications: {
     type: 'array',
-    minItems: 1,
+    minItems: 0,
     description: instructions.json_output_schema.properties.medications.description,
     items: {
       type: 'object',

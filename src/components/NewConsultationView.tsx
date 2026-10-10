@@ -330,9 +330,9 @@ export default function NewConsultationView({ patient, onBack, onComplete }: { p
 
                 <div>
                   <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Medicamentos da conduta ({patient.weight}kg)</h4>
-                  <p className="mt-1 text-xs text-slate-500">Tudo que o tratamento pediu, com dose.</p>
+                  <p className="mt-1 text-xs text-slate-500">Receituário para o tutor: apresentação, dose em mg/kg e como dar neste peso.</p>
                   <div className="mt-2 space-y-3">
-                    {(result.medications ?? []).map((med, i) => (
+                    {(result.medications ?? []).length > 0 ? (result.medications ?? []).map((med, i) => (
                       <div key={i} className="rounded-xl border border-emerald-100 bg-white p-4 shadow-sm">
                         <div className="flex flex-wrap items-baseline justify-between gap-2">
                           <div className="font-bold text-emerald-700">{med.name}</div>
@@ -348,13 +348,17 @@ export default function NewConsultationView({ patient, onBack, onComplete }: { p
                           <div><span className="font-medium text-slate-700">Duração:</span> {med.duration}</div>
                         </div>
                       </div>
-                    ))}
+                    )) : (
+                      <p className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                        Medicamentos não são necessários neste caso. A conduta é de suporte, sem prescrição farmacológica.
+                      </p>
+                    )}
                   </div>
                 </div>
 
                 <div>
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Exames para diferenciar as hipóteses</h4>
-                  <p className="mt-1 text-xs text-slate-500">Cada exame deve ajudar a confirmar ou afastar uma das doenças acima.</p>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Exames complementares sugeridos</h4>
+                  <p className="mt-1 text-xs text-slate-500">Nome do exame e o que ele responde neste paciente. O que já foi pedido aparece como já solicitada.</p>
                   <ul className="mt-2 list-inside list-disc text-sm text-slate-700">
                     {(result.suggestedExams ?? []).map((exam, i) => <li key={i}>{typeof exam === 'string' ? exam : String(exam)}</li>)}
                   </ul>

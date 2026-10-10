@@ -7,7 +7,7 @@ export const diagnosisSpecialist: Specialist = {
   label: 'Diagnóstico',
   detail: 'Hipótese principal',
   attachExams: false,
-  buildPrompts({ patient, symptoms, examsNote }) {
+  buildPrompts({ patient, symptoms, examsNote, draft, fixNote }) {
     return {
       systemInstruction: `Você escreve UM parágrafo de laudo, no máximo dois. Não prescreva, não liste diferenciais, não sugira exame.
 Consulte:
@@ -24,13 +24,30 @@ Proibido:
 - "Achados clinicopatológicos demonstrando", "necessitam de investigação complementar", "alterações metabólicas sistêmicas".
 - Fechar hipotireoidismo, Cushing, mucocele ou hepatopatia. Causa vai no "pode ser", nunca como diagnóstico.
 - Chamar de leve o que está 1,5× acima (colesterol 509 não é leve) e de moderado o que está 4% acima (FA 156 é leve).
-- Vacinas em dia: parvo/cinomose não são o achado principal.
+- Vacina, dieta, viagem ou exame que a anamnese não escreveu. Sem "vacinação em dia" se o tutor não falou disso.
+- Se a anamnese DISSER vacinas em dia: parvo/cinomose não são o achado principal. Se não disser, ignore vacina.
 
 Responda APENAS JSON com: diagnosis, sources.`,
       userPrompt: `${patientBlock(patient, symptoms, examsNote)}
 
-Dois períodos. Achado + magnitude + "sugestivo de" + causas possíveis. Sem prefixo de gravidade.`,
+Dois períodos. Achado + magnitude + "sugestivo de" + causas possíveis. Sem prefixo de gravidade. Só o que a anamnese e os exames anexados disseram.${fixNote ? `
+
+LAUDO ANTERIOR
+${draft.diagnosis}
+
+CORREÇÃO — reescreva o laudo sem o erro:
+${fixNote}` : ''}`,
     };
+  },
+  review(result: DiagnosisResult, symptoms: string) {
+    const issues: string[] = [];
+    if (/vacin/i.test(result.diagnosis) && !/vacin/i.test(symptoms)) {
+      issues.push('O laudo citou vacina/vacinação em dia e a anamnese não falou disso. Apague essa frase. Não invente histórico.');
+    }
+    if (/^\s*(leve|moderado|grave|quadro cl[ií]nico leve)\b/i.test(result.diagnosis)) {
+      issues.push('Não comece com grau (Leve / Quadro clínico leve). Comece pelo achado.');
+    }
+    return issues;
   },
   assert(result: DiagnosisResult) {
     if (!result.diagnosis) {

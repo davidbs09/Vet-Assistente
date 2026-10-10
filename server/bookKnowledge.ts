@@ -32,9 +32,9 @@ const BOOKS_BY_STEP: Record<AdviceStep, readonly string[]> = {
   documents: [],
   diagnosis: ['NELSON_COUTO', 'JERICO', 'CRIVELLENTI', 'MERCK_VET'],
   treatment: ['NELSON_COUTO', 'JERICO', 'CRIVELLENTI', 'MERCK_VET'],
-  medications: ['SAUNDERS_SHERDING', 'MERCK_VET'],
+  medications: [],
   exams: ['NELSON_COUTO', 'JERICO', 'CRIVELLENTI', 'MERCK_VET'],
-  validate: ['NELSON_COUTO', 'JERICO', 'CRIVELLENTI', 'MERCK_VET', 'SAUNDERS_SHERDING'],
+  validate: ['NELSON_COUTO', 'JERICO', 'CRIVELLENTI', 'MERCK_VET'],
 };
 
 const STOP = new Set([
@@ -48,7 +48,7 @@ const LIMITS: Record<AdviceStep, {limit: number; mode: 'thin' | 'exams' | 'full'
   documents: {limit: 0, mode: 'thin'},
   diagnosis: {limit: 10, mode: 'thin'},
   treatment: {limit: 8, mode: 'full'},
-  medications: {limit: 6, mode: 'full'},
+  medications: {limit: 0, mode: 'full'},
   exams: {limit: 10, mode: 'exams'},
   validate: {limit: 10, mode: 'full'},
 };

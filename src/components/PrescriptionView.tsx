@@ -46,7 +46,7 @@ export default function PrescriptionView({ consultation, patient, onBack }: { co
             </div>
           </div>
           <div class="content">
-            ${consultation.medications.map(med => `
+            ${consultation.medications && consultation.medications.length ? consultation.medications.map(med => `
               <div class="medication">
                 <div class="med-name">${med.name}</div>
                 <div class="med-details">
@@ -56,7 +56,7 @@ export default function PrescriptionView({ consultation, patient, onBack }: { co
                   <strong>Duração:</strong> ${med.duration}
                 </div>
               </div>
-            `).join('')}
+            `).join('') : '<p>Medicamentos não são necessários neste caso. A conduta é de suporte, sem prescrição farmacológica.</p>'}
           </div>
           <div class="signature">
             <div class="sig-line"></div>
@@ -105,7 +105,7 @@ export default function PrescriptionView({ consultation, patient, onBack }: { co
         </div>
 
         <div className="mt-12 space-y-8">
-          {consultation.medications.map((med, i) => (
+          {consultation.medications && consultation.medications.length > 0 ? consultation.medications.map((med, i) => (
             <div key={i} className="border-l-4 border-emerald-500 pl-6">
               <h3 className="text-lg font-bold text-emerald-900">{med.name}</h3>
               <div className="mt-2 space-y-1 text-sm text-slate-600">
@@ -115,7 +115,9 @@ export default function PrescriptionView({ consultation, patient, onBack }: { co
                 <p><strong>Duração:</strong> {med.duration}</p>
               </div>
             </div>
-          ))}
+          )) : (
+            <p className="text-sm text-slate-600">Medicamentos não são necessários neste caso. A conduta é de suporte, sem prescrição farmacológica.</p>
+          )}
         </div>
 
         <div className="mt-24 text-center">

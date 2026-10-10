@@ -48,6 +48,7 @@ export type SpecialistInput = {
   symptoms: string;
   examsNote: string;
   draft: DiagnosisResult;
+  fixNote?: string;
 };
 
 export type Specialist = {
@@ -56,5 +57,6 @@ export type Specialist = {
   detail: string;
   attachExams: boolean;
   buildPrompts: (input: SpecialistInput) => SpecialistPrompts;
+  review?: (result: DiagnosisResult, symptoms: string) => string[];
   assert: (result: DiagnosisResult) => void;
 };

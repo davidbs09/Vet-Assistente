@@ -61,19 +61,28 @@ export async function generateClinicalReport(
       label: specialist.label,
     });
 
-    const prompts = specialist.buildPrompts({
-      patient,
-      symptoms,
-      examsNote,
-      draft,
-    });
-    const partial = await requestStep(
-      specialist.id,
-      prompts,
-      specialist.attachExams ? examPayload : [],
-      buildKnowledgeQuery(specialist.id, patient, symptoms, draft),
-    );
-    draft = mergeResult(draft, partial);
+    const runStep = async (fixNote?: string) => {
+      const prompts = specialist.buildPrompts({
+        patient,
+        symptoms,
+        examsNote,
+        draft,
+        fixNote,
+      });
+      const partial = await requestStep(
+        specialist.id,
+        prompts,
+        specialist.attachExams ? examPayload : [],
+        buildKnowledgeQuery(specialist.id, patient, symptoms, draft),
+      );
+      draft = mergeResult(draft, partial);
+    };
+
+    await runStep();
+    const issues = specialist.review?.(draft, symptoms) || [];
+    if (issues.length) {
+      await runStep(issues.join('\n'));
+    }
     specialist.assert(draft);
     if (specialist.id === 'documents' && draft.examFindings) {
       examsNote = draft.examFindings;
