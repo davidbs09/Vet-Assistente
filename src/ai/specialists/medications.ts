@@ -77,5 +77,5 @@ ${fixNote}` : ''}`,
     // Mesmo detector que o chefe usa, para a lista já sair coerente na 1ª passada.
     return medicationGaps(symptoms, result);
   },
-  assert() {},
+  assert() { },
 };

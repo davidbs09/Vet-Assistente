@@ -9,6 +9,8 @@ export interface Patient {
   sex?: PatientSex;
   breed: string;
   weight: number;
+  ageYears?: number;
+  neutered?: boolean;
   ownerName: string;
   ownerPhone: string;
   createdAt: any;

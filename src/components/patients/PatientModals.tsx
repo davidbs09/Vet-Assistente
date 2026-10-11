@@ -30,6 +30,26 @@ function SexField({ defaultValue }: { defaultValue?: string }) {
   );
 }
 
+function NeuteredField({ defaultValue }: { defaultValue?: boolean }) {
+  const current = defaultValue === true ? 'yes' : defaultValue === false ? 'no' : '';
+  return (
+    <div className="space-y-2">
+      <label className="text-sm font-medium text-slate-700" htmlFor="patient-neutered">Castração</label>
+      <select
+        id="patient-neutered"
+        name="neutered"
+        required
+        defaultValue={current}
+        className={selectClass}
+      >
+        <option value="" disabled>Selecione</option>
+        <option value="yes">Castrado</option>
+        <option value="no">Não castrado</option>
+      </select>
+    </div>
+  );
+}
+
 export function AddPatientModal({
   onClose,
   onSubmit,
@@ -76,6 +96,13 @@ export function AddPatientModal({
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-700">Peso (kg)</label>
             <Input name="weight" type="number" step="0.1" required placeholder="Ex: 10.5" />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Idade (anos)</label>
+              <Input name="ageYears" type="number" step="0.1" min="0" required placeholder="Ex: 3 (0,5 = 6 meses)" />
+            </div>
+            <NeuteredField />
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-700">Raça</label>
@@ -163,6 +190,21 @@ export function EditPatientModal({
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-700">Peso (kg)</label>
             <Input name="weight" type="number" step="0.1" min="0.1" required defaultValue={patient.weight} placeholder="Ex: 10.5" />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Idade (anos)</label>
+              <Input
+                name="ageYears"
+                type="number"
+                step="0.1"
+                min="0"
+                required
+                defaultValue={patient.ageYears ?? ''}
+                placeholder="Ex: 3 (0,5 = 6 meses)"
+              />
+            </div>
+            <NeuteredField defaultValue={patient.neutered} />
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-700">Raça</label>

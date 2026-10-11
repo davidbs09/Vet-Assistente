@@ -568,6 +568,14 @@ export default function App() {
       alert('Informe o sexo do animal.');
       return;
     }
+    if (fields.neutered === undefined) {
+      alert('Informe se o animal é castrado.');
+      return;
+    }
+    if (fields.ageYears === undefined) {
+      alert('Informe a idade do animal (em anos; use frações para meses, ex.: 0,5 = 6 meses).');
+      return;
+    }
     if (!isValidPatientPhone(fields.ownerPhone)) {
       alert('Informe o telefone com DDD e número, só dígitos. Ex: 11964646464');
       return;
@@ -617,6 +625,10 @@ export default function App() {
     const fields = readPatientForm(form);
     if (!fields.name || !fields.breed || !fields.ownerName || !fields.sex || Number.isNaN(fields.weight) || fields.weight <= 0) {
       alert('Preencha nome, sexo, raça, peso, proprietário e telefone para salvar a ficha.');
+      return;
+    }
+    if (fields.neutered === undefined || fields.ageYears === undefined) {
+      alert('Informe a idade e a castração do animal para salvar a ficha.');
       return;
     }
     if (!isValidPatientPhone(fields.ownerPhone)) {

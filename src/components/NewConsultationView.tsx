@@ -132,7 +132,7 @@ export default function NewConsultationView({ patient, onBack, onComplete }: { p
     setPipelineStep(exams.length > 0 ? 'documents' : 'diagnosis');
     try {
       const advice = await generateClinicalReport(
-        { species: patient.species, breed: patient.breed, weight: patient.weight, sex: patient.sex },
+        { species: patient.species, breed: patient.breed, weight: patient.weight, sex: patient.sex, ageYears: patient.ageYears, neutered: patient.neutered },
         symptoms,
         exams,
         (progress) => setPipelineStep(progress.step),

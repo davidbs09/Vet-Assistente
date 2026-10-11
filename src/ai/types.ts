@@ -29,6 +29,8 @@ export type PatientContext = {
   breed: string;
   weight: number;
   sex?: string;
+  ageYears?: number;
+  neutered?: boolean;
 };
 
 export type PipelineProgress = {

@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import { Dog, Printer } from 'lucide-react';
 import type { Consultation, Patient } from '../types/clinical';
-import { formatPatientSex } from './patients/patientForm';
+import { formatPatientAge, formatPatientNeutered, formatPatientSex } from './patients/patientForm';
 import { Button } from './ui';
 
 export default function PrescriptionView({ consultation, patient, onBack }: { consultation: Consultation, patient: Patient, onBack: () => void }) {
@@ -38,6 +38,8 @@ export default function PrescriptionView({ consultation, patient, onBack }: { co
               <strong>Paciente:</strong> ${patient.name}<br>
               <strong>Espécie:</strong> ${patient.species === 'dog' ? 'Cão' : 'Gato'}<br>
               <strong>Sexo:</strong> ${formatPatientSex(patient.sex)}<br>
+              <strong>Idade:</strong> ${formatPatientAge(patient.ageYears)}<br>
+              <strong>Castração:</strong> ${formatPatientNeutered(patient.neutered)}<br>
               <strong>Peso:</strong> ${patient.weight} kg
             </div>
             <div style="text-align: right;">
@@ -96,6 +98,8 @@ export default function PrescriptionView({ consultation, patient, onBack }: { co
             <p><span className="text-slate-500">Paciente:</span> <span className="font-bold">{patient.name}</span></p>
             <p><span className="text-slate-500">Espécie:</span> <span className="font-bold capitalize">{patient.species === 'dog' ? 'Cão' : 'Gato'}</span></p>
             <p><span className="text-slate-500">Sexo:</span> <span className="font-bold">{formatPatientSex(patient.sex)}</span></p>
+            <p><span className="text-slate-500">Idade:</span> <span className="font-bold">{formatPatientAge(patient.ageYears)}</span></p>
+            <p><span className="text-slate-500">Castração:</span> <span className="font-bold">{formatPatientNeutered(patient.neutered)}</span></p>
             <p><span className="text-slate-500">Peso:</span> <span className="font-bold">{patient.weight} kg</span></p>
           </div>
           <div className="space-y-2 text-right">
