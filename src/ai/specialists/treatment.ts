@@ -21,7 +21,7 @@ Exemplo de tom (outro caso, só o ritmo):
 
 Como raciocinar (serve para QUALQUER caso, consulte as fontes):
 - Abra pelo PILAR real deste paciente (estabilização, nutrição, fluido, cirurgia, isolamento, controle do foco). Decida pelo diagnóstico + estado descrito, não por um molde fixo.
-- A partir do diagnóstico, nomeie os OBJETIVOS que o caso exige e como executá-los: processo infeccioso/supurativo precisa de antimicrobiano; dor precisa de analgesia; febre, antitérmico; vômito ativo, antiemese; desidratação/instabilidade, fluido; condição cirúrgica, o encaminhamento.
+- A partir do diagnóstico, nomeie os OBJETIVOS que o caso exige e como executá-los: processo infeccioso/supurativo precisa de antimicrobiano; dor precisa de analgesia; febre, antitérmico (dor e febre são objetivos distintos — opioide não substitui antitérmico); vômito ativo, antiemese; desidratação/instabilidade, fluido; ferida/abscesso/otite/pele aberta, LIMPEZA com o produto nomeado (clorexidina diluída e/ou solução fisiológica — o que usar e no sítio); condição cirúrgica, o encaminhamento.
 - Via conforme o estado: paciente estável que vai para casa recebe manejo oral/caseiro; instável/internado/pré-cirúrgico recebe suporte parenteral.
 - Nomeie cada recurso (classe ou princípio) que a conduta usa — quem monta a lista vai transcrever esses objetivos. Não invente adjuvante sem indicação (TCM, ômega, estatina, hepatoprotetor).
 - Diga o que o tutor faz em casa e quando reavaliar. Pedir exame novo é tarefa do especialista de exames.

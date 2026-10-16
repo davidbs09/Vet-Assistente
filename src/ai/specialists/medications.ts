@@ -30,20 +30,20 @@ Você TEM as fontes abaixo. CONSULTE antes de prescrever — dose, via, apresent
 ${listSources(['BRETAS_VIANA', 'SAUNDERS_SHERDING', 'MERCK_VET', 'VETSMART', 'ALFAVET'])}${formularySection}
 
 COMO RACIOCINAR (serve para QUALQUER caso, não decore doença):
-1. Leia o diagnóstico, a conduta E a anamnese. Extraia os OBJETIVOS terapêuticos deste paciente (ex.: combater a infecção, controlar a dor, baixar a febre, conter o vômito, repor fluido, proteger a mucosa). Cada objetivo real vira UM item. Sintoma descrito na anamnese é objetivo mesmo que a conduta não o tenha detalhado: se há DOR ou FEBRE no caso, a lista PRECISA de analgésico/antitérmico (ex.: dipirona), salvo contraindicação. Nunca deixe dor/febre sem cobertura.
+1. Leia o diagnóstico, a conduta E a anamnese. Extraia os OBJETIVOS terapêuticos deste paciente (ex.: combater a infecção, controlar a dor, baixar a febre, conter o vômito, repor fluido, proteger a mucosa, limpar/antissepsia do sítio). Cada objetivo real vira UM item. Sintoma descrito na anamnese é objetivo mesmo que a conduta não o tenha detalhado.
 2. Para cada objetivo, escolha o fármaco de PRIMEIRA LINHA${formulary ? ' (priorizando o FORMULÁRIO acima)' : ' na fatia'} para esta espécie, com a via que o estado do paciente permite (casa = oral; instável/internado/pré-cirúrgico = injetável).
 3. Princípios que valem sempre:
    - Processo infeccioso/bacteriano é como a dor: NÃO pode faltar cobertura. Sinais de infecção (secreção/corrimento purulento ou fétido, pus, abscesso, supuração, sepse, febre com foco, cultura/antibiograma positivo, diagnóstico de origem bacteriana) tornam o antimicrobiano de primeira linha OBRIGATÓRIO. Hormônio, prostaglandina ou sintomático NÃO substituem o antibiótico. Nunca entregue um caso infeccioso sem antibiótico.
-   - Dor presente exige analgésico; dor visceral/moderada a intensa pode somar analgésicos de classes diferentes (ex.: anti-inflamatório/dipirona + opioide) — classes diferentes não são duplicata.
+   - DOR e FEBRE são objetivos DISTINTOS. Dor exige analgésico. Febre exige antitérmico (dipirona ou AINE indicado). Tramadol, metadona, morfina ou buprenorfina NÃO baixam febre — se os dois sinais existem, a lista precisa dos DOIS objetivos (ex.: dipirona para febre + tramadol para dor, ou dipirona cobrindo os dois se a dor for leve). Nunca entregue febre coberta só por opioide.
    - Vômito ativo agora pede antiemético sistêmico; vômito que já cessou pede antiemético só SOS.
+   - LIMPEZA/antissepsia: ferida, laceração, abscesso, otite, pele aberta, queimadura, mordedura ou conduta que fale em lavar/limpar EXIGE o produto na lista — o que usar, em que concentração/diluição e no sítio. Consulte o formulário (clorexidina, SF 0,9%) e depois as fontes para diluição. Fluido IV, antibiótico sistêmico ou “limpar a ferida” na conduta NÃO substituem o item. Infecção só interna (ITU, pneumonia) não pede limpeza tópica.
    - Febre alta/desidratação/instabilidade pedem a via e o suporte compatíveis.
    - Não repita o MESMO objetivo com dois fármacos equivalentes. Sem Unasyn. Sem dois antibióticos de espectro sobreposto. Sem dois soros.
 
 DOSE (obrigatório em todo item):
-- Pegue mg/kg (ou UI/kg) da fatia para a espécie certa (CAN/FEL).
-- Multiplique pelo peso: ${kg} kg. Converta para a apresentação comercial (gotas, mL, fração de comprimido).
-- Mostre a conta no campo dosage: "X mg/kg → ${kg} kg = Y → [Z gotas / Z mL / fração]". Não arredonde para cima acima do teto da fonte.
+- Sistêmico: pegue mg/kg (ou UI/kg) da fatia para a espécie certa (CAN/FEL). Multiplique pelo peso: ${kg} kg. Converta para a apresentação comercial (gotas, mL, fração de comprimido). Mostre a conta no campo dosage: "X mg/kg → ${kg} kg = Y → [Z gotas / Z mL / fração]". Não arredonde para cima acima do teto da fonte.
 - 1 gota de solução 500 mg/mL = 25 mg (referência de conversão de gotas).
+- Limpeza/antissepsia tópica: NÃO use mg/kg. Informe concentração ou diluição, o sítio (ferida, ouvido, pele) e como aplicar (lavar, compressa, gotas). Ex.: "Clorexidina 0,05% na ferida após lavagem com SF 0,9%". Pegue a diluição nas fontes quando houver; senão use a nota do formulário.
 
 Formato de cada item:
 - name: "Princípio (Marca + apresentação + concentração)"
@@ -64,7 +64,7 @@ ${JSON.stringify({ diagnosis: draft.diagnosis })}
 CONDUTA JÁ DEFINIDA — tire dela os objetivos terapêuticos:
 ${draft.treatment}
 
-Liste os medicamentos. Um por objetivo, dose calculada para ${kg} kg a partir da fatia. REGRAS QUE NÃO PODEM FALHAR: se há DOR/FEBRE, tem analgésico/antitérmico; se há INFECÇÃO/sinal bacteriano, tem antibiótico de primeira linha. Faltar qualquer um desses pode induzir a erro um veterinário em início de carreira — confira antes de responder.${fixNote ? `
+Liste os medicamentos. Um por objetivo, dose calculada para ${kg} kg a partir da fatia (tópico de limpeza: concentração/diluição). REGRAS QUE NÃO PODEM FALHAR: se há DOR, tem analgésico; se há FEBRE, tem antitérmico (opioide não vale); se há INFECÇÃO/sinal bacteriano, tem antibiótico; se há FERIDA/ABSCESSO/OTITE/pele aberta, tem o produto de limpeza. Faltar qualquer um desses pode induzir a erro um veterinário em início de carreira — confira antes de responder.${fixNote ? `
 
 LISTA ANTERIOR
 ${JSON.stringify(draft.medications)}

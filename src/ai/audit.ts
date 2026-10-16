@@ -12,28 +12,37 @@ function medFold(draft: DiagnosisResult): string {
   return fold(draft.medications.map((m) => `${m.name} ${m.forDiagnosis || ''} ${m.dosage}`).join(' '));
 }
 
+function isTopicalCleaning(med: { name: string; dosage?: string; forDiagnosis?: string }): boolean {
+  return /clorexid|clorhex|povidon|pvpi|antissept|rifamicin|nitrofurazon|peroxido de hidrogen|agua oxigenad|sulfadiazina de prata|topic|local|lavag|irrigac|dilu/.test(
+    fold(`${med.name} ${med.forDiagnosis || ''} ${med.dosage || ''}`),
+  );
+}
+
 // Lacunas da PRESCRIÇÃO — princípios clínicos gerais (sintoma/achado → objetivo), não mapa de doença.
 export function medicationGaps(symptoms: string, draft: DiagnosisResult): string[] {
   const issues: string[] = [];
   const anamnese = fold(symptoms);
-  const clinical = fold(`${symptoms} ${draft.diagnosis}`);
+  const clinical = fold(`${symptoms} ${draft.diagnosis} ${draft.examFindings || ''} ${draft.treatment}`);
   const treatment = fold(draft.treatment);
   const meds = medFold(draft);
   const hasMeds = draft.medications.length > 0;
 
-  const treatmentImpliesDrugs = /mg|ml|antibiot|antimicrob|analges|antiemet|anti-?inflamat|fluidoterap|ringer|soro|cristaloid|dose|mg\/kg|comprimido|gotas|antiterm|antipiret/.test(treatment);
+  const treatmentImpliesDrugs = /mg|ml|antibiot|antimicrob|analges|antiemet|anti-?inflamat|fluidoterap|ringer|soro|cristaloid|dose|mg\/kg|comprimido|gotas|antiterm|antipiret|clorexid|antissept|lavagem/.test(treatment);
   if (!hasMeds && treatmentImpliesDrugs) {
     issues.push('A conduta nomeia recursos farmacológicos e a lista veio vazia. Transcreva cada objetivo em um item com dose pelo peso.');
   }
 
-  // Dor / febre → analgésico / antitérmico
+  // Dor e febre são OBJETIVOS SEPARADOS. Opioide cobre dor; NÃO cobre febre.
   const pain = /\bdor\b|dolorid|algia|abdome rigido|abdomen rigido|rigidez abdominal|claudica|mialgia|nocicep|sensibilidade a palpac/.test(clinical);
-  const temp = /\b(39[.,][5-9]|40|41)\s*°?\s*c\b/.test(clinical);
+  const temp = /\b(39[.,][5-9]|4[01](?:[.,]\d)?)\s*°?\s*c\b/.test(clinical);
   const fever = /febre|febril|hipertermia|pirexia/.test(clinical) || temp;
-  const hasAnalgesic = /analges|antialg|antipiret|antiterm|anti-?inflamat|\baine\b|dipiron|metamizol|tramadol|codein|morfin|metadon|butorf|buprenorf|meloxic|carprofen|cetoprofen|firocoxib|robenacox|flunixin/.test(meds);
-  if ((pain || fever) && !hasAnalgesic) {
-    const what = pain && fever ? 'dor e febre' : pain ? 'dor' : 'febre';
-    issues.push(`Paciente com ${what} e a lista NÃO tem analgésico/antitérmico. Inclua a primeira linha (ex.: dipirona) com dose calculada pelo peso, salvo contraindicação.`);
+  const hasPainMed = /analges|antialg|anti-?inflamat|\baine\b|dipiron|metamizol|novalgina|tramadol|codein|morfin|metadon|butorf|buprenorf|gabapentin|meloxic|carprofen|cetoprofen|firocoxib|robenacox|flunixin/.test(meds);
+  const hasAntipyretic = /antipiret|antiterm|dipiron|metamizol|novalgina|anti-?inflamat|\baine\b|meloxic|carprofen|cetoprofen|firocoxib|robenacox|flunixin/.test(meds);
+  if (pain && !hasPainMed) {
+    issues.push('Paciente com DOR e a lista NÃO tem analgésico. Inclua a primeira linha (ex.: dipirona) com dose pelo peso, salvo contraindicação.');
+  }
+  if (fever && !hasAntipyretic) {
+    issues.push('Paciente com FEBRE e a lista NÃO tem antitérmico. Opioide/analgésico puro (tramadol, metadona, morfina) NÃO baixa febre. Inclua dipirona (ou AINE se indicado) com dose pelo peso — mesmo que já exista analgésico para a dor.');
   }
 
   // Infecção/sepse/supuração → antimicrobiano (mesma exigência da dor/febre).
@@ -53,13 +62,22 @@ export function medicationGaps(symptoms: string, draft: DiagnosisResult): string
     issues.push('Vômito ativo e sem antiemético sistêmico na lista. Inclua o antiemético (não apenas SOS).');
   }
 
+  // Limpeza / antissepsia tópica — ferida, abscesso, otite, pele aberta. Não vale para infecção só interna (ITU, pneumonia).
+  const needsCleaning = /ferida|lacerac|abscesso|debrid|lavagem|irrigac|antisseps|\botite\b|otolog|\bouvido\b|pioderm|hot.?spot|queimadur|mordedur|fistul|escara|ulcera cutane|ferida cirurg|dreno|banho medicin|cerumin| rasgo | rasgad|limpeza (da|do|de|otolog|auric|da ferida|do ouvido)|secrecao purulent.*(pele|ferida|ouvido|canal)/.test(clinical);
+  const hasCleaning = /clorexid|clorhex|povidon|pvpi|antissept|rifamicin|nitrofurazon|peroxido de hidrogen|agua oxigenad|sulfadiazina de prata|ceruminol|(solucao|soro) fisiolog.*(ferida|lavag|topic|local|ouvido|irrig)|nacl 0[.,]?9.*(ferida|lavag|topic|ouvido)|cloreto de sodio 0[.,]?9.*(ferida|lavag|topic|ouvido)|uso (topic|local)|diluicao 0[.,]?0/.test(meds);
+  if (needsCleaning && !hasCleaning) {
+    issues.push('O caso pede LIMPEZA/antissepsia (ferida, abscesso, otite, pele aberta ou a conduta já falou em lavar) e a lista NÃO nomeia o que usar. Inclua o produto (clorexidina diluída e/ou solução fisiológica para lavagem) com concentração/diluição e o sítio de aplicação. Fluido IV não substitui limpeza tópica.');
+  }
+
   // Classe citada na CONDUTA ausente da lista (lê as palavras da própria conduta)
   const classes: Array<[string, RegExp]> = [
     ['antimicrobiano', /antibiotic|antimicrob/],
     ['analgésico', /analges|antialg/],
+    ['antitérmico', /antiterm|antipiret/],
     ['antiemético', /antiemet|antivomit/],
     ['fluidoterapia', /fluidoterap|cristaloid|ringer/],
     ['protetor gástrico', /gastroprote|protetor gastric/],
+    ['limpeza/antissepsia', /antissept|clorexid|lavagem|limpeza/],
   ];
   for (const [label, pattern] of classes) {
     if (pattern.test(treatment) && !pattern.test(meds)) {
@@ -67,9 +85,16 @@ export function medicationGaps(symptoms: string, draft: DiagnosisResult): string
     }
   }
 
-  // Dose sem conta pelo peso
+  // Dose: sistêmico precisa da conta pelo peso; tópico/limpeza precisa de concentração/diluição.
   for (const med of draft.medications) {
-    if (!/kg|\bgota|\bml\b|comprimid|\bui\b/.test(fold(med.dosage || ''))) {
+    const dose = fold(med.dosage || '');
+    if (isTopicalCleaning(med)) {
+      if (!/%|dilu|ml|gota|topic|local|lavag|aplic|concent/.test(dose)) {
+        issues.push(`O item de limpeza "${med.name}" não diz concentração/diluição nem como aplicar no sítio. Informe (ex.: clorexidina 0,05% na ferida; SF 0,9% para lavagem).`);
+      }
+      continue;
+    }
+    if (!/kg|\bgota|\bml\b|comprimid|\bui\b/.test(dose)) {
       issues.push(`O item "${med.name}" não mostra a dose calculada pelo peso (mg/kg → total → apresentação). Refaça a conta.`);
     }
   }
