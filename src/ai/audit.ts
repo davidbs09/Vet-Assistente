@@ -1,3 +1,4 @@
+import { doseCeilingIssues } from './doseGuard';
 import type { AdviceStep, DiagnosisResult } from './types';
 
 export type AuditIssue = { target: AdviceStep; note: string };
@@ -19,7 +20,7 @@ function isTopicalCleaning(med: { name: string; dosage?: string; forDiagnosis?: 
 }
 
 // Lacunas da PRESCRIÇÃO — princípios clínicos gerais (sintoma/achado → objetivo), não mapa de doença.
-export function medicationGaps(symptoms: string, draft: DiagnosisResult): string[] {
+export function medicationGaps(symptoms: string, draft: DiagnosisResult, species?: string): string[] {
   const issues: string[] = [];
   const anamnese = fold(symptoms);
   const clinical = fold(`${symptoms} ${draft.diagnosis} ${draft.examFindings || ''} ${draft.treatment}`);
@@ -62,11 +63,29 @@ export function medicationGaps(symptoms: string, draft: DiagnosisResult): string
     issues.push('Vômito ativo e sem antiemético sistêmico na lista. Inclua o antiemético (não apenas SOS).');
   }
 
-  // Limpeza / antissepsia tópica — ferida, abscesso, otite, pele aberta. Não vale para infecção só interna (ITU, pneumonia).
-  const needsCleaning = /ferida|lacerac|abscesso|debrid|lavagem|irrigac|antisseps|\botite\b|otolog|\bouvido\b|pioderm|hot.?spot|queimadur|mordedur|fistul|escara|ulcera cutane|ferida cirurg|dreno|banho medicin|cerumin| rasgo | rasgad|limpeza (da|do|de|otolog|auric|da ferida|do ouvido)|secrecao purulent.*(pele|ferida|ouvido|canal)/.test(clinical);
-  const hasCleaning = /clorexid|clorhex|povidon|pvpi|antissept|rifamicin|nitrofurazon|peroxido de hidrogen|agua oxigenad|sulfadiazina de prata|ceruminol|(solucao|soro) fisiolog.*(ferida|lavag|topic|local|ouvido|irrig)|nacl 0[.,]?9.*(ferida|lavag|topic|ouvido)|cloreto de sodio 0[.,]?9.*(ferida|lavag|topic|ouvido)|uso (topic|local)|diluicao 0[.,]?0/.test(meds);
-  if (needsCleaning && !hasCleaning) {
-    issues.push('O caso pede LIMPEZA/antissepsia (ferida, abscesso, otite, pele aberta ou a conduta já falou em lavar) e a lista NÃO nomeia o que usar. Inclua o produto (clorexidina diluída e/ou solução fisiológica para lavagem) com concentração/diluição e o sítio de aplicação. Fluido IV não substitui limpeza tópica.');
+  // Sítio delicado (olho) × pele. Princípio geral, não mapa de doença.
+  const ocular = /conjuntiv|secrecao ocular|secrecoes oculares|olho|blefarit|uveit|ceratit|ulcera de cornea|saco conjuntival|epifora/.test(clinical);
+  const hasColirio = /colirio|oftalm|saco conjuntival|gotas oculares|uso ocular|uso oftalm/.test(meds);
+  if (ocular && !hasColirio) {
+    issues.push('Há lesão/secreção OCULAR (conjuntivite, secreção no olho) e a lista NÃO tem colírio. Inclua o colírio adequado (antibiótico oftálmico de primeira linha), com via ocular. Limpeza da face com soro fisiológico NÃO substitui o colírio. Clorexidina no olho é proibida.');
+  }
+
+  const chlorhexidine = draft.medications.filter((m) => /clorexid|clorhex/.test(fold(`${m.name} ${m.forDiagnosis || ''} ${m.dosage}`)));
+  const cutaneousWound = /ferida|lacerac|abscesso|pioderm|hot.?spot|queimadur|mordedur|fistul|escara|ulcera cutane|pele aberta|lesao cutane/.test(clinical);
+  for (const med of chlorhexidine) {
+    const site = fold(`${med.name} ${med.forDiagnosis || ''} ${med.dosage}`);
+    if (/ocular|olho|conjuntiv|narina|nasal|mucosa|oral|boca|genital/.test(site)) {
+      issues.push(`Clorexidina em "${med.name}" está indicada para sítio delicado (olho, narina, mucosa). PROIBIDO. Clorexidina só em PELE com lesão cutânea. Olho → colírio; face/narinas → SF 0,9% com gaze. Remova a clorexidina desse sítio.`);
+    } else if (!cutaneousWound) {
+      issues.push('A lista tem clorexidina e o caso NÃO descreve lesão cutânea (ferida, abscesso, piodermite, pele aberta). Não use clorexidina em olho, narina ou mucosa. Se a limpeza é de face/secreção, use só SF 0,9% com gaze; se é olho, use colírio.');
+    }
+  }
+
+  // Limpeza de PELE/ferida/ouvido — não dispara por olho/narina/conjuntivite.
+  const needsSkinCleaning = /ferida|lacerac|abscesso|debrid|\botite\b|otolog|\bouvido\b|pioderm|hot.?spot|queimadur|mordedur|fistul|escara|ulcera cutane|ferida cirurg|dreno|banho medicin|cerumin| rasgo | rasgad|limpeza (da ferida|do ouvido|otolog)|secrecao purulent.*(pele|ferida|ouvido|canal)/.test(clinical);
+  const hasSkinCleaning = /clorexid|clorhex|povidon|pvpi|rifamicin|nitrofurazon|(solucao|soro) fisiolog.*(ferida|pele|ouvido|lavag|topic)|nacl 0[.,]?9.*(ferida|pele|ouvido)|cloreto de sodio 0[.,]?9.*(ferida|pele|ouvido)/.test(meds);
+  if (needsSkinCleaning && !hasSkinCleaning) {
+    issues.push('O caso pede limpeza de PELE/ferida/ouvido e a lista não nomeia o produto. Pele: clorexidina diluída (nunca no olho). Ouvido: produto otológico se membrana íntegra. Fluido IV não substitui.');
   }
 
   // Classe citada na CONDUTA ausente da lista (lê as palavras da própria conduta)
@@ -77,7 +96,7 @@ export function medicationGaps(symptoms: string, draft: DiagnosisResult): string
     ['antiemético', /antiemet|antivomit/],
     ['fluidoterapia', /fluidoterap|cristaloid|ringer/],
     ['protetor gástrico', /gastroprote|protetor gastric/],
-    ['limpeza/antissepsia', /antissept|clorexid|lavagem|limpeza/],
+    ['colírio / tratamento ocular', /colirio|oftalm/],
   ];
   for (const [label, pattern] of classes) {
     if (pattern.test(treatment) && !pattern.test(meds)) {
@@ -102,16 +121,18 @@ export function medicationGaps(symptoms: string, draft: DiagnosisResult): string
   if (BOOK_NAMES.test(meds)) {
     issues.push('Há nome de livro/autor na prescrição. Remova — consultamos, não citamos.');
   }
+
+  issues.push(...doseCeilingIssues(draft.medications, species));
   return issues;
 }
 
 // Relatório completo do chefe: cada problema etiquetado com o especialista dono.
-export function auditReport(symptoms: string, draft: DiagnosisResult): AuditIssue[] {
+export function auditReport(symptoms: string, draft: DiagnosisResult, species?: string): AuditIssue[] {
   const issues: AuditIssue[] = [];
   const anamnese = fold(symptoms);
   const diagnosis = fold(draft.diagnosis);
 
-  for (const note of medicationGaps(symptoms, draft)) {
+  for (const note of medicationGaps(symptoms, draft, species)) {
     issues.push({ target: 'medications', note });
   }
 
@@ -151,9 +172,22 @@ export function auditReport(symptoms: string, draft: DiagnosisResult): AuditIssu
     issues.push({ target: 'exams', note: 'Há nome de livro/autor nos exames. Remova.' });
   }
 
-  // Conduta: citação
+  // Conduta: citação + sítio errado de antisséptico
   if (BOOK_NAMES.test(fold(draft.treatment))) {
     issues.push({ target: 'treatment', note: 'Há nome de livro/autor na conduta. Remova.' });
+  }
+  const treatmentFold = fold(draft.treatment);
+  if (/clorexid|clorhex/.test(treatmentFold) && /olho|ocular|conjuntiv|narina|nasal|mucosa/.test(treatmentFold)) {
+    issues.push({
+      target: 'treatment',
+      note: 'A conduta indica clorexidina em olho, narina ou mucosa. Reescreva: olho → colírio; face/narinas → SF 0,9% com gaze. Clorexidina só em pele com lesão cutânea.',
+    });
+  }
+  if (/conjuntiv|secrecao ocular|olhos/.test(treatmentFold + ' ' + diagnosis) && !/colirio|oftalm/.test(treatmentFold) && /conjuntiv|secrecao ocular/.test(fold(symptoms + ' ' + draft.diagnosis))) {
+    issues.push({
+      target: 'treatment',
+      note: 'Há conjuntivite/secreção ocular e a conduta não nomeia colírio. Inclua o colírio (não clorexidina) além da limpeza com SF 0,9% na face/narinas.',
+    });
   }
 
   return issues;

@@ -35,6 +35,10 @@ function asText(value: unknown, fallback = ''): string {
   return fallback;
 }
 
+function preferPrednisolone(value: string): string {
+  return value.replace(/\bprednisona\b/gi, (match) => (match[0] === 'P' ? 'Prednisolona' : 'prednisolona'));
+}
+
 function stripCitations(value: string): string {
   return value
     .replace(/\s*\[[^\]]*(?:Nelson|Couto|Jeric[oó]|Crivellenti|Bretas|Viana|Saunders|Sherding|Elsevier|Moraillon|Merck|Vetsmart|AlfaVet|Tratado|Papich)[^\]]*\]/gi, '')
@@ -210,11 +214,11 @@ function normalizeMedication(item: unknown): DiagnosisResult['medications'][numb
     || extractFrequency(pickText(record, ['dose_final', 'dose_referencia', 'observacoes', 'instructions']));
   const duration = pickText(record, ['duration', 'duracao', 'instructions', 'indication']);
   return {
-    name: stripCitations(pickText(record, ['name', 'medicamento'], 'Medicamento')),
-    dosage: stripCitations(dosage || 'Não informado'),
+    name: preferPrednisolone(stripCitations(pickText(record, ['name', 'medicamento'], 'Medicamento'))),
+    dosage: preferPrednisolone(stripCitations(dosage || 'Não informado')),
     frequency: stripCitations(frequency || 'Conforme orientação'),
     duration: stripCitations(duration || 'Conforme reavaliação'),
-    forDiagnosis: stripCitations(pickText(record, ['forDiagnosis', 'indication', 'objetivo'])) || undefined,
+    forDiagnosis: preferPrednisolone(stripCitations(pickText(record, ['forDiagnosis', 'indication', 'objetivo']))) || undefined,
   };
 }
 
@@ -231,7 +235,7 @@ export function normalizeResult(parsed: Record<string, unknown>): DiagnosisResul
   return {
     diagnosis: stripCitations(flattenDiagnosis(parsed.diagnosis)),
     differentials: Array.isArray(parsed.differentials) ? parsed.differentials.map(normalizeDifferential) : [],
-    treatment: stripCitations(flattenTreatment(parsed.treatment)),
+    treatment: preferPrednisolone(stripCitations(flattenTreatment(parsed.treatment))),
     medications: pickList(parsed, ['medications', 'medicacoes', 'prescription', 'prescricao', 'lista']).map(normalizeMedication),
     suggestedExams: Array.isArray(parsed.suggestedExams)
       ? parsed.suggestedExams.map((item) => stripCitations(asText(item))).filter(Boolean)

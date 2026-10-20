@@ -85,7 +85,7 @@ export async function generateClinicalReport(
   for (const specialist of queue) {
     await runSpecialist(specialist);
     for (let attempt = 0; attempt < MAX_FIXES; attempt++) {
-      const issues = specialist.review?.(draft, symptoms) || [];
+      const issues = specialist.review?.(draft, symptoms, patient) || [];
       if (!issues.length) break;
       await runSpecialist(specialist, issues.join('\n'));
     }
@@ -98,7 +98,7 @@ export async function generateClinicalReport(
   const byId = new Map(queue.map((specialist) => [specialist.id, specialist]));
   const MAX_ROUNDS = 2;
   for (let round = 0; round < MAX_ROUNDS; round++) {
-    const issues = auditReport(symptoms, draft).filter(
+    const issues = auditReport(symptoms, draft, patient.species).filter(
       (issue) => issue.target !== 'validate' && byId.has(issue.target),
     );
     if (!issues.length) break;

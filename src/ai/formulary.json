@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "description": "Formulário dos medicamentos mais usados, agrupados por objetivo terapêutico. É a PRIMEIRA consulta do especialista de medicamentos: ele escolhe aqui o fármaco (status 'recomendado' = primeira escolha; 'opcional' = alternativa de substância diferente) e só depois vai ao livro buscar a DOSE pelo peso. Se o objetivo não tiver classe/opção aqui, vai direto às fontes. Listar um fármaco NÃO obriga a usá-lo: só entra se o caso tiver o objetivo correspondente.",
   "statusLegend": {
     "recomendado": "Primeira escolha para o objetivo. Vira o medicamento principal.",
@@ -180,15 +180,24 @@
       ]
     },
     {
+      "id": "ocular",
+      "label": "Colírios e tratamento ocular",
+      "objective": "Lesão/secreção ocular (conjuntivite, secreção no olho, ceratite)",
+      "medications": [
+        { "name": "Colírio antibiótico (tobramicina ou cloranfenicol oftálmico)", "status": "recomendado", "species": ["dog", "cat"], "route": "ocular", "notes": "Primeira linha em conjuntivite/secreção ocular. Via: saco conjuntival. NUNCA substituir por clorexidina." },
+        { "name": "Colírio de ofloxacino oftálmico", "status": "opcional", "species": ["dog", "cat"], "route": "ocular", "notes": "Alternativa de fluoroquinolona oftálmica quando indicada" }
+      ]
+    },
+    {
       "id": "limpeza_antissepsia",
       "label": "Limpeza e antissepsia",
-      "objective": "Limpeza/lavagem e antissepsia tópica (ferida, abscesso, otite, pele aberta)",
+      "objective": "Limpeza/lavagem tópica — o PRODUTO depende do sítio (pele ≠ olho ≠ narina)",
       "medications": [
-        { "name": "Clorexidina", "status": "recomendado", "species": ["dog", "cat"], "route": "tópico", "notes": "Antissepsia: ferida ~0,05%; pele intacta 2–4%. Ouvido só com produto otológico e membrana íntegra. Não usar formulação alcoólica em ferida." },
-        { "name": "Cloreto de sódio 0,9% (solução fisiológica)", "status": "opcional", "species": ["dog", "cat"], "route": "tópico", "notes": "Lavagem/irrigação do sítio (primeiro passo). Não substitui clorexidina quando o caso pede antissepsia." },
-        { "name": "Povidona-iodo diluída", "status": "opcional", "species": ["dog", "cat"], "route": "tópico", "notes": "Antisséptico alternativo; diluir. Evitar grandes áreas." },
-        { "name": "Rifamicina tópica", "status": "opcional", "species": ["dog", "cat"], "route": "tópico", "notes": "Antibacteriano tópico de ferida (após limpeza)" },
-        { "name": "Nitrofurazona", "status": "opcional", "species": ["dog", "cat"], "route": "tópico", "notes": "Antibacteriano tópico; após limpeza" }
+        { "name": "Cloreto de sódio 0,9% (solução fisiológica) tópico", "status": "recomendado", "species": ["dog", "cat"], "route": "tópico", "notes": "Limpeza de face, narinas e pálpebras com gaze. Não é fluido IV. Não substitui colírio no olho." },
+        { "name": "Clorexidina", "status": "opcional", "species": ["dog", "cat"], "route": "tópico", "notes": "SOMENTE pele com lesão cutânea (ferida ~0,05%). PROIBIDO em olho, narina, mucosa e ouvido médio. Não usar se o caso for só secreção ocular/nasal." },
+        { "name": "Povidona-iodo diluída", "status": "opcional", "species": ["dog", "cat"], "route": "tópico", "notes": "Só pele; nunca olho. Diluir." },
+        { "name": "Rifamicina tópica", "status": "opcional", "species": ["dog", "cat"], "route": "tópico", "notes": "Pele/ferida, após limpeza" },
+        { "name": "Nitrofurazona", "status": "opcional", "species": ["dog", "cat"], "route": "tópico", "notes": "Pele/ferida, após limpeza" }
       ]
     },
     {

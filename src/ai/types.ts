@@ -59,6 +59,6 @@ export type Specialist = {
   detail: string;
   attachExams: boolean;
   buildPrompts: (input: SpecialistInput) => SpecialistPrompts;
-  review?: (result: DiagnosisResult, symptoms: string) => string[];
+  review?: (result: DiagnosisResult, symptoms: string, patient?: PatientContext) => string[];
   assert: (result: DiagnosisResult) => void;
 };
