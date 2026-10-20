@@ -53,7 +53,7 @@ export default function PrescriptionView({ consultation, patient, onBack }: { co
                 <div class="med-name">${med.name}</div>
                 <div class="med-details">
                   ${med.forDiagnosis ? `<strong>Indicação:</strong> ${med.forDiagnosis}<br>` : ''}
-                  <strong>Dose:</strong> ${med.dosage}<br>
+                  <strong>Dose:</strong> ${med.dosage.replace(/\n/g, '<br>')}<br>
                   <strong>Frequência:</strong> ${med.frequency}<br>
                   <strong>Duração:</strong> ${med.duration}
                 </div>
@@ -114,7 +114,7 @@ export default function PrescriptionView({ consultation, patient, onBack }: { co
               <h3 className="text-lg font-bold text-emerald-900">{med.name}</h3>
               <div className="mt-2 space-y-1 text-sm text-slate-600">
                 {med.forDiagnosis && <p><strong>Indicação:</strong> {med.forDiagnosis}</p>}
-                <p><strong>Dose:</strong> {med.dosage}</p>
+                <p className="whitespace-pre-line"><strong>Dose:</strong> {med.dosage}</p>
                 <p><strong>Frequência:</strong> {med.frequency}</p>
                 <p><strong>Duração:</strong> {med.duration}</p>
               </div>

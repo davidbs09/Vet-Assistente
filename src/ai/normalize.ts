@@ -1,3 +1,4 @@
+import { formatAdministration, formatTabletDose } from './tabletDose';
 import type { DiagnosisResult, DifferentialDiagnosis } from './types';
 
 function asText(value: unknown, fallback = ''): string {
@@ -215,7 +216,7 @@ function normalizeMedication(item: unknown): DiagnosisResult['medications'][numb
   const duration = pickText(record, ['duration', 'duracao', 'instructions', 'indication']);
   return {
     name: preferPrednisolone(stripCitations(pickText(record, ['name', 'medicamento'], 'Medicamento'))),
-    dosage: preferPrednisolone(stripCitations(dosage || 'Não informado')),
+    dosage: formatAdministration(formatTabletDose(preferPrednisolone(stripCitations(dosage || 'Não informado')))),
     frequency: stripCitations(frequency || 'Conforme orientação'),
     duration: stripCitations(duration || 'Conforme reavaliação'),
     forDiagnosis: preferPrednisolone(stripCitations(pickText(record, ['forDiagnosis', 'indication', 'objetivo']))) || undefined,

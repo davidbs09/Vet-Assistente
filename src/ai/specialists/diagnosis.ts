@@ -1,4 +1,4 @@
-import { patientBlock } from '../patient';
+import { patientBlock, readTemperatures, temperatureBand } from '../patient';
 import { listSources } from '../sources';
 import type { DiagnosisResult, Specialist } from '../types';
 
@@ -24,6 +24,7 @@ Proibido:
 - "Achados clinicopatológicos demonstrando", "necessitam de investigação complementar", "alterações metabólicas sistêmicas".
 - Fechar hipotireoidismo, Cushing, mucocele ou hepatopatia. Causa vai no "pode ser", nunca como diagnóstico.
 - Chamar de leve o que está 1,5× acima (colesterol 509 não é leve) e de moderado o que está 4% acima (FA 156 é leve).
+- Temperatura: 37,5 a 39 °C é normal — não escreva febre. Abaixo de 37,5 é hipotermia; acima de 39 é febre. A gravidade sobe com a distância desses limites (40–41 °C não é febre leve; 36 °C não é “está bem”). Não comece o laudo com o grau; incorpore essa magnitude no achado.
 - Vacina, dieta, viagem ou exame que a anamnese não escreveu. Sem "vacinação em dia" se o tutor não falou disso.
 - Se a anamnese DISSER vacinas em dia: parvo/cinomose não são o achado principal. Se não disser, ignore vacina.
 - Citar Nelson, Jericó, Couto, Bretas ou qualquer livro no laudo.
@@ -42,6 +43,18 @@ ${fixNote}` : ''}`,
   },
   review(result: DiagnosisResult, symptoms: string) {
     const issues: string[] = [];
+    const temps = readTemperatures(`${symptoms} ${result.diagnosis}`);
+    const callsFever = /febre|febril|hipertermia|pirexia/i.test(result.diagnosis);
+    const callsNormal = /temperatura normal|afebril|sem febre|parametros? (?:dentro da )?normal/i.test(result.diagnosis);
+    if (temps.some((value) => temperatureBand(value) === 'normal') && !temps.some((value) => temperatureBand(value) !== 'normal') && callsFever) {
+      issues.push('A temperatura medida está entre 37,5 e 39 °C (normal). Reescreva sem chamar de febre.');
+    }
+    if (temps.some((value) => temperatureBand(value) === 'fever') && callsNormal) {
+      issues.push('Há temperatura acima de 39 °C. Isso é febre, não parâmetro normal. Quanto mais acima de 39, mais grave — incorpore essa magnitude.');
+    }
+    if (temps.some((value) => temperatureBand(value) === 'hypothermia') && (callsNormal || /afebril/i.test(result.diagnosis))) {
+      issues.push('Há temperatura abaixo de 37,5 °C. Isso é hipotermia, não parâmetro normal. Quanto mais abaixo, mais grave.');
+    }
     if (/vacin/i.test(result.diagnosis) && !/vacin/i.test(symptoms)) {
       issues.push('O laudo citou vacina/vacinação em dia e a anamnese não falou disso. Apague essa frase. Não invente histórico.');
     }

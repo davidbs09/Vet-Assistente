@@ -343,7 +343,7 @@ export default function NewConsultationView({ patient, onBack, onComplete }: { p
                           )}
                         </div>
                         <div className="mt-1 grid grid-cols-2 gap-2 text-xs text-slate-500">
-                          <div><span className="font-medium text-slate-700">Dose:</span> {med.dosage}</div>
+                          <div className="whitespace-pre-line"><span className="font-medium text-slate-700">Dose:</span> {med.dosage}</div>
                           <div><span className="font-medium text-slate-700">Freq:</span> {med.frequency}</div>
                           <div><span className="font-medium text-slate-700">Duração:</span> {med.duration}</div>
                         </div>

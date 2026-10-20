@@ -51,7 +51,7 @@ ${listSources()}
 RACIOCÍNIO OBRIGATÓRIO (serve para qualquer caso — não decore doença):
 1. ANAMNESE: releia o que o tutor disse. Liste mentalmente os fatos. O laudo, a conduta e a lista só podem usar ESSES fatos + os exames anexados. Qualquer história inventada (vacina, viagem, trauma, gestação, dieta) que a anamnese não trouxe: APAGUE.
 2. SEXO/ESPÉCIE: apague hipótese anatomicamente impossível.
-3. DIAGNÓSTICO: é o que está demonstrado (achado/síndrome). Etiologia que exigiria exame ainda não feito fica como possibilidade ("pode ser"), não como diagnóstico fechado. Magnitude fiel (leve ≠ significativo).
+3. DIAGNÓSTICO: é o que está demonstrado (achado/síndrome). Etiologia que exigiria exame ainda não feito fica como possibilidade ("pode ser"), não como diagnóstico fechado. Magnitude fiel (leve ≠ significativo). Temperatura: 37,5 a 39 °C é normal (não é febre); abaixo de 37,5 é hipotermia; acima de 39 é febre. A gravidade acompanha a distância desses limites.
 4. PROBLEMAS → OBJETIVOS: a partir do diagnóstico, derive os objetivos terapêuticos que o caso EXIGE, consultando as fontes. Princípios que valem sempre:
    - Falhas inaceitáveis — caçe ativamente cada uma: (a) DOR sem analgésico; (b) FEBRE sem antitérmico — opioide NÃO baixa febre; (c) INFECÇÃO/processo bacteriano SEM antimicrobiano; (d) CONJUNTIVITE/secreção ocular SEM colírio — SF na face não substitui; (e) CLOREXIDINA em olho, narina ou mucosa — PROIBIDO, só pele com lesão cutânea; se não há ferida de pele, tire a clorexidina. Se faltar ou o sítio estiver errado, INCLUA/CORRIJA.
    - Vômito ativo → antiemético sistêmico; vômito cessado → antiemético SOS. Desidratação/choque → fluido pela via adequada.

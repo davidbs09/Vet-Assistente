@@ -1,5 +1,5 @@
 {
-  "version": 5,
+  "version": 6,
   "description": "Formulário dos medicamentos mais usados, agrupados por objetivo terapêutico. É a PRIMEIRA consulta do especialista de medicamentos: ele escolhe aqui o fármaco (status 'recomendado' = primeira escolha; 'opcional' = alternativa de substância diferente) e só depois vai ao livro buscar a DOSE pelo peso. Se o objetivo não tiver classe/opção aqui, vai direto às fontes. Listar um fármaco NÃO obriga a usá-lo: só entra se o caso tiver o objetivo correspondente.",
   "statusLegend": {
     "recomendado": "Primeira escolha para o objetivo. Vira o medicamento principal.",
@@ -164,6 +164,18 @@
       "objective": "Suplementação nutricional adjuvante",
       "medications": [
         { "name": "Ômega 3 (ácidos graxos)", "status": "recomendado", "species": ["dog"], "notes": "Anti-inflamatório adjuvante (pele/renal/articular)" }
+      ]
+    },
+    {
+      "id": "condroprotetor",
+      "label": "Condroprotetores e suporte articular",
+      "objective": "Suporte de cartilagem / artropatia degenerativa (adjuvante — só se o caso tiver esse objetivo)",
+      "medications": [
+        { "name": "Artrotabs", "status": "recomendado", "species": ["dog", "cat"], "route": "oral", "notes": "1 comprimido por animal, 1 vez ao dia (cão e gato)" },
+        { "name": "Condroton (sulfato de condroitina / GAG)", "status": "opcional", "species": ["dog", "cat"], "notes": "Dose do livro: 15–30 mg/kg VO a cada 24 h, ou 3–5 mg/kg IM/SC a cada 3–5 dias por 3 semanas (cão e gato). Confirme a apresentação no livro antes de prescrever." },
+        { "name": "Ograx Artro", "status": "opcional", "species": ["dog", "cat"], "route": "oral", "notes": "1 cápsula para cada 10 kg, 1 vez ao dia" },
+        { "name": "Condroplex 500", "status": "opcional", "species": ["dog", "cat"], "route": "oral", "notes": "1 cápsula para cada 5 kg, 1 vez ao dia" },
+        { "name": "Condroplex 1000", "status": "opcional", "species": ["dog", "cat"], "route": "oral", "notes": "1 cápsula para cada 10 kg, 1 vez ao dia" }
       ]
     },
     {

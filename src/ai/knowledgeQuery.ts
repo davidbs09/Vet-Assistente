@@ -28,6 +28,11 @@ const SYNONYMS: Record<string, string[]> = {
   parasita: ['antiparasit', 'anti-helmint'],
   pulga: ['ectoparasit'],
   carrapato: ['ectoparasit'],
+  artrose: ['condroprotetor', 'condroitina', 'articular'],
+  osteoartr: ['condroprotetor', 'condroitina', 'articular'],
+  degenerativ: ['condroprotetor', 'condroitina'],
+  articular: ['condroprotetor', 'condroitina'],
+  cartilagem: ['condroprotetor', 'condroitina'],
 };
 
 function fold(value: string): string {

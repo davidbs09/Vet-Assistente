@@ -1,4 +1,5 @@
 import { doseCeilingIssues } from './doseGuard';
+import { readTemperatures, temperatureBand } from './patient';
 import type { AdviceStep, DiagnosisResult } from './types';
 
 export type AuditIssue = { target: AdviceStep; note: string };
@@ -35,8 +36,10 @@ export function medicationGaps(symptoms: string, draft: DiagnosisResult, species
 
   // Dor e febre são OBJETIVOS SEPARADOS. Opioide cobre dor; NÃO cobre febre.
   const pain = /\bdor\b|dolorid|algia|abdome rigido|abdomen rigido|rigidez abdominal|claudica|mialgia|nocicep|sensibilidade a palpac/.test(clinical);
-  const temp = /\b(39[.,][5-9]|4[01](?:[.,]\d)?)\s*°?\s*c\b/.test(clinical);
-  const fever = /febre|febril|hipertermia|pirexia/.test(clinical) || temp;
+  const temps = readTemperatures(clinical);
+  const measuredFever = temps.some((value) => temperatureBand(value) === 'fever');
+  const onlyNormalTemp = temps.length > 0 && temps.every((value) => temperatureBand(value) === 'normal');
+  const fever = measuredFever || (/febre|febril|hipertermia|pirexia/.test(clinical) && !onlyNormalTemp);
   const hasPainMed = /analges|antialg|anti-?inflamat|\baine\b|dipiron|metamizol|novalgina|tramadol|codein|morfin|metadon|butorf|buprenorf|gabapentin|meloxic|carprofen|cetoprofen|firocoxib|robenacox|flunixin/.test(meds);
   const hasAntipyretic = /antipiret|antiterm|dipiron|metamizol|novalgina|anti-?inflamat|\baine\b|meloxic|carprofen|cetoprofen|firocoxib|robenacox|flunixin/.test(meds);
   if (pain && !hasPainMed) {
