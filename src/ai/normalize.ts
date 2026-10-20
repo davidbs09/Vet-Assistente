@@ -191,7 +191,7 @@ export function parseModelJson(text: string): Record<string, unknown> {
     if (parsed) return parsed;
   }
 
-  throw new Error('A resposta do modelo não veio em JSON válido. Gere o diagnóstico novamente.');
+  throw new Error('O sistema não conseguiu concluir o relatório. Por favor, gere novamente.');
 }
 
 function asList(value: unknown): unknown[] {

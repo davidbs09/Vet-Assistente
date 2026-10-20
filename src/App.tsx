@@ -7,7 +7,6 @@ import {
 import { AnimatePresence, motion } from 'framer-motion';
 import LoginPage, { RegisterFormValues } from './components/LoginPage';
 import AdminUsersPage from './components/AdminUsersPage';
-import DeployGuideModal from './components/DeployGuideModal';
 import NewConsultationView from './components/NewConsultationView';
 import PrescriptionView from './components/PrescriptionView';
 import ProntuarioView from './components/ProntuarioView';
@@ -70,8 +69,6 @@ export default function App() {
   const [passwordResetEmail, setPasswordResetEmail] = useState<string | null>(null);
   const [passwordResetNonce, setPasswordResetNonce] = useState(0);
   const [authSubmitting, setAuthSubmitting] = useState(false);
-  const [showDeployGuide, setShowDeployGuide] = useState(false);
-  const [copiedSnippet, setCopiedSnippet] = useState<string | null>(null);
 
   const checkSession = async (currentUser: User) => {
     setCheckingConflict(true);
@@ -591,7 +588,7 @@ export default function App() {
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, 'patients');
       if (isPermissionDenied(err)) {
-        alert('O Firestore bloqueou a criação do paciente. Publique o arquivo firestore.rules completo no Console (Firestore > Regras).');
+        alert('Não foi possível salvar a ficha agora. Tente novamente.');
         return;
       }
       alert(err instanceof Error ? err.message : 'Não foi possível criar o paciente.');
@@ -643,7 +640,7 @@ export default function App() {
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, 'patients');
       if (isPermissionDenied(err)) {
-        alert('O Firestore bloqueou a edição do paciente. Publique o arquivo firestore.rules completo no Console (Firestore > Regras).');
+        alert('Não foi possível salvar a ficha agora. Tente novamente.');
         return;
       }
       alert(err instanceof Error ? err.message : 'Não foi possível atualizar o paciente.');
@@ -674,30 +671,17 @@ export default function App() {
 
   if (!user) {
     return (
-      <>
-        <LoginPage
-          onLogin={handleLogin}
-          onRegister={handleRegister}
-          onCompletePasswordReset={handleCompletePasswordReset}
-          onRequestPasswordReset={handleRequestPasswordReset}
-          passwordResetEmail={passwordResetEmail}
-          passwordResetNonce={passwordResetNonce}
-          error={loginError}
-          success={loginSuccess}
-          submitting={authSubmitting}
-        />
-
-        {/* Deploy Guide Modal when logged out */}
-        <AnimatePresence>
-          {showDeployGuide && (
-            <DeployGuideModal 
-              onClose={() => setShowDeployGuide(false)} 
-              copiedSnippet={copiedSnippet} 
-              setCopiedSnippet={setCopiedSnippet} 
-            />
-          )}
-        </AnimatePresence>
-      </>
+      <LoginPage
+        onLogin={handleLogin}
+        onRegister={handleRegister}
+        onCompletePasswordReset={handleCompletePasswordReset}
+        onRequestPasswordReset={handleRequestPasswordReset}
+        passwordResetEmail={passwordResetEmail}
+        passwordResetNonce={passwordResetNonce}
+        error={loginError}
+        success={loginSuccess}
+        submitting={authSubmitting}
+      />
     );
   }
 
@@ -727,7 +711,6 @@ export default function App() {
         isAdmin={isAdminProfile(userProfile, user.email)}
         onGoHome={() => { setView('dashboard'); setSelectedPatient(null); }}
         onOpenAdmin={() => setView('admin')}
-        onOpenDeployGuide={() => setShowDeployGuide(true)}
         onLogout={handleLogout}
       />
 
@@ -821,14 +804,6 @@ export default function App() {
           />
         )}
 
-        {/* Deploy Guide Modal when logged in */}
-        {showDeployGuide && (
-          <DeployGuideModal 
-            onClose={() => setShowDeployGuide(false)} 
-            copiedSnippet={copiedSnippet} 
-            setCopiedSnippet={setCopiedSnippet} 
-          />
-        )}
       </AnimatePresence>
     </div>
   );

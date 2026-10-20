@@ -642,7 +642,7 @@ export function mapAuthError(error: unknown): string {
     if (message.toLowerCase().includes('reset de senha') || message.toLowerCase().includes('firestore.rules')) {
       return message;
     }
-    return 'O login autenticou, mas o Firestore bloqueou a gravação do perfil. Publique as regras de security do arquivo firestore.rules no Console (Firestore > Regras).';
+    return 'Não foi possível concluir o acesso agora. Tente novamente.';
   }
 
   switch (code) {
@@ -674,10 +674,12 @@ export function mapAuthError(error: unknown): string {
     case 'auth/network-request-failed':
       return 'Falha de rede ao autenticar. Verifique sua conexão.';
     case 'auth/operation-not-allowed':
-      return 'O login por e-mail e senha ainda não está habilitado neste projeto Firebase.';
     case 'auth/configuration-not-found':
-      return 'O Authentication ainda não foi iniciado neste projeto Firebase. No Console, abra Authentication, clique em Começar e habilite o provedor E-mail/senha.';
+      return 'Não foi possível entrar agora. Tente novamente mais tarde.';
     default:
+      if (/firebase|firestore|google|auth\//i.test(message)) {
+        return 'Não foi possível completar a operação. Tente novamente.';
+      }
       return message;
   }
 }

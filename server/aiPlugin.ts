@@ -158,35 +158,32 @@ function isTimeoutError(error: unknown): boolean {
     || message.includes('tempo limite');
 }
 
+const AI_BUSY = 'O sistema está com alta demanda. Por favor, gere o relatório novamente.';
+const AI_TIMEOUT = 'O sistema demorou para responder. Por favor, gere o relatório novamente.';
+const AI_FAILED = 'Não foi possível gerar o relatório agora. Por favor, gere novamente.';
+
 function mapAiError(error: unknown): {status: number; message: string} {
   const message = error instanceof Error ? error.message : String(error);
   const status = typeof error === 'object' && error && 'status' in error
     ? Number((error as {status?: number}).status)
     : 0;
-  const name = AI_CONFIG.displayName;
 
-  if (message.includes('GEMINI_API_KEY não configurada')) {
-    return {status: 503, message};
+  if (isTimeoutError(error) || message.includes('tempo limite')) {
+    return {status: 504, message: AI_TIMEOUT};
   }
-  if (status === 401 || message.includes('API_KEY_INVALID') || message.includes('API key not valid') || message.includes('invalid api key')) {
-    return {status: 401, message: `A chave do ${name} é inválida ou expirou. Confira GEMINI_API_KEY no .env.`};
+  if (status === 429 || status === 503 || message.includes('RESOURCE_EXHAUSTED') || message.includes('quota') || message.includes('UNAVAILABLE') || message.includes('overloaded')) {
+    return {status: status === 429 ? 429 : 503, message: AI_BUSY};
   }
-  if (status === 429 || message.includes('RESOURCE_EXHAUSTED') || message.includes('quota')) {
-    return {status: 429, message: `A cota ou o limite do ${name} estourou. Aguarde um minuto e tente de novo.`};
-  }
-  if (status === 503 || message.includes('UNAVAILABLE') || message.includes('overloaded')) {
-    return {status: 503, message: `O ${name} está com alta demanda agora. Espere uns 20 segundos e gere o relatório de novo.`};
+  if (status === 401 || message.includes('API_KEY_INVALID') || message.includes('API key not valid') || message.includes('invalid api key') || message.includes('GEMINI_API_KEY não configurada')) {
+    return {status: 503, message: AI_FAILED};
   }
   if (status === 404 || message.includes('NOT_FOUND') || message.includes('not found')) {
-    return {status: 404, message: `O modelo ${AI_CONFIG.model} não está disponível nesta chave.`};
-  }
-  if (isTimeoutError(error) || message.includes('tempo limite')) {
-    return {status: 504, message: `O ${name} demorou demais para responder. Tente gerar o diagnóstico novamente.`};
+    return {status: 503, message: AI_FAILED};
   }
   if (status === 400) {
-    return {status: 400, message: `O ${name} recusou o pedido. Confira a chave, o modelo e tente de novo sem anexos pesados.`};
+    return {status: 400, message: 'Não foi possível ler este pedido. Gere o relatório novamente. Se houver anexo, tente sem o arquivo mais pesado.'};
   }
-  return {status: status >= 400 && status < 600 ? status : 500, message: message || `Falha não tratada ao consultar o ${name}.`};
+  return {status: status >= 400 && status < 600 ? status : 500, message: AI_FAILED};
 }
 
 function createClient(env: EnvMap): GoogleGenAI {
@@ -261,7 +258,7 @@ async function handleAdvice(req: IncomingMessage, res: ServerResponse, env: EnvM
   }
 
   if (!text) {
-    sendJson(res, 502, {error: `${AI_CONFIG.displayName} não devolveu texto no diagnóstico.`});
+    sendJson(res, 502, {error: 'O sistema não conseguiu concluir o relatório. Por favor, gere novamente.'});
     return;
   }
   sendJson(res, 200, {text});
@@ -312,7 +309,7 @@ function attachAiRoutes(server: ViteDevServer, env: EnvMap): void {
         console.error('Falha ao devolver erro da IA:', sendError);
         if (!res.writableEnded) {
           res.statusCode = 500;
-          res.end(JSON.stringify({error: `Falha não tratada ao consultar o ${AI_CONFIG.displayName}.`}));
+          res.end(JSON.stringify({error: 'Não foi possível gerar o relatório agora. Por favor, gere novamente.'}));
         }
       }
     }

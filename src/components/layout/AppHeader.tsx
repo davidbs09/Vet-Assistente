@@ -1,4 +1,4 @@
-import { Dog, Globe, LogOut } from 'lucide-react';
+import { Dog, LogOut } from 'lucide-react';
 import { Button } from '../ui';
 
 export default function AppHeader({
@@ -7,7 +7,6 @@ export default function AppHeader({
   isAdmin,
   onGoHome,
   onOpenAdmin,
-  onOpenDeployGuide,
   onLogout,
 }: {
   displayName?: string | null;
@@ -15,7 +14,6 @@ export default function AppHeader({
   isAdmin: boolean;
   onGoHome: () => void;
   onOpenAdmin: () => void;
-  onOpenDeployGuide: () => void;
   onLogout: () => void;
 }) {
   const label = displayName || email || 'U';
@@ -31,16 +29,6 @@ export default function AppHeader({
         </div>
         
         <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={onOpenDeployGuide}
-            className="hidden md:flex items-center gap-1.5 rounded-full bg-slate-100 hover:bg-slate-200 px-3 py-1 text-xs font-medium text-slate-700 transition-colors cursor-pointer border border-slate-200"
-            title="Guia de Implantação e Domínio www.ajudavoce.com.br"
-          >
-            <Globe className="h-3.5 w-3.5 text-emerald-600" />
-            <span>ajudavoce.com.br</span>
-          </button>
-
           <div className="hidden sm:flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 border border-emerald-200">
             <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
             <span>Login Único Ativo</span>
