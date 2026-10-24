@@ -1,6 +1,6 @@
 import { SUPPORT_CONTACTS } from '../../shared/supportContacts';
 
-const items = [SUPPORT_CONTACTS.phone, SUPPORT_CONTACTS.whatsapp, SUPPORT_CONTACTS.email];
+const items = [SUPPORT_CONTACTS.whatsapp, SUPPORT_CONTACTS.phone,  SUPPORT_CONTACTS.email];
 
 export default function SupportContacts() {
   return (

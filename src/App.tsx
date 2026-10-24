@@ -37,6 +37,7 @@ import {
   persistAuthToken,
   registerWithEmail,
   completePasswordReset,
+  changeOwnPassword,
   isPasswordResetLogin,
   requestPasswordReset,
   requiresPasswordReset,
@@ -45,6 +46,7 @@ import {
 import { handleFirestoreError, OperationType, testConnection } from './lib/firestoreErrors';
 import { clearBrowserSession, getOrCreateSessionId, hasBrowserSession, markBrowserSession } from './lib/session';
 import type { AppView, Consultation, Patient, SessionStatus } from './types/clinical';
+import { PASSWORD_POLICY_MESSAGE } from './shared/passwordPolicy';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -68,6 +70,13 @@ export default function App() {
   const [loginSuccess, setLoginSuccess] = useState<string | null>(null);
   const [passwordResetEmail, setPasswordResetEmail] = useState<string | null>(null);
   const [passwordResetNonce, setPasswordResetNonce] = useState(0);
+  const [ownResetOpen, setOwnResetOpen] = useState(false);
+  const [ownResetNotice, setOwnResetNotice] = useState<string | null>(null);
+  const [ownResetError, setOwnResetError] = useState<string | null>(null);
+  const [ownResetBusy, setOwnResetBusy] = useState(false);
+  const [ownCurrentPassword, setOwnCurrentPassword] = useState('');
+  const [ownNewPassword, setOwnNewPassword] = useState('');
+  const [ownConfirmPassword, setOwnConfirmPassword] = useState('');
   const [authSubmitting, setAuthSubmitting] = useState(false);
 
   const checkSession = async (currentUser: User) => {
@@ -490,6 +499,38 @@ export default function App() {
     }
   };
 
+  const closeOwnPassword = () => {
+    setOwnResetOpen(false);
+    setOwnResetError(null);
+    setOwnResetNotice(null);
+    setOwnCurrentPassword('');
+    setOwnNewPassword('');
+    setOwnConfirmPassword('');
+  };
+
+  const handleChangeOwnPassword = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (ownNewPassword !== ownConfirmPassword) {
+      setOwnResetError('As senhas não coincidem.');
+      return;
+    }
+    try {
+      setOwnResetBusy(true);
+      setOwnResetError(null);
+      setOwnResetNotice(null);
+      await changeOwnPassword(ownCurrentPassword, ownNewPassword);
+      setOwnCurrentPassword('');
+      setOwnNewPassword('');
+      setOwnConfirmPassword('');
+      setOwnResetNotice('Senha atualizada. As outras sessões desta conta foram encerradas.');
+    } catch (error: unknown) {
+      console.error('Own password change error:', error);
+      setOwnResetError(mapAuthError(error));
+    } finally {
+      setOwnResetBusy(false);
+    }
+  };
+
   const handleRequestPasswordReset = async (email: string) => {
     try {
       setAuthSubmitting(true);
@@ -711,6 +752,14 @@ export default function App() {
         isAdmin={isAdminProfile(userProfile, user.email)}
         onGoHome={() => { setView('dashboard'); setSelectedPatient(null); }}
         onOpenAdmin={() => setView('admin')}
+        onResetOwnPassword={() => {
+          setOwnCurrentPassword('');
+          setOwnNewPassword('');
+          setOwnConfirmPassword('');
+          setOwnResetOpen(true);
+          setOwnResetError(null);
+          setOwnResetNotice(null);
+        }}
         onLogout={handleLogout}
       />
 
@@ -723,7 +772,17 @@ export default function App() {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 20 }}
             >
-              <AdminUsersPage currentUserId={user.uid} />
+              <AdminUsersPage
+                currentUserId={user.uid}
+                onResetOwnPassword={() => {
+                  setOwnCurrentPassword('');
+                  setOwnNewPassword('');
+                  setOwnConfirmPassword('');
+                  setOwnResetOpen(true);
+                  setOwnResetError(null);
+                  setOwnResetNotice(null);
+                }}
+              />
             </motion.div>
           )}
 
@@ -805,6 +864,81 @@ export default function App() {
         )}
 
       </AnimatePresence>
+
+      {ownResetOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
+          <form onSubmit={handleChangeOwnPassword} className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <h2 className="text-lg font-semibold text-slate-900">Trocar minha senha</h2>
+            <p className="mt-2 text-sm leading-relaxed text-slate-600">
+              A troca acontece aqui, com você logado. Informe a senha atual. Ao salvar, a senha antiga deixa de funcionar e as outras sessões desta conta são encerradas.
+            </p>
+            <div className="mt-4 space-y-3">
+              <label className="block text-xs font-medium text-slate-600" htmlFor="own-current-password">
+                Senha atual
+                <input
+                  id="own-current-password"
+                  type="password"
+                  autoComplete="current-password"
+                  value={ownCurrentPassword}
+                  onChange={(event) => setOwnCurrentPassword(event.target.value)}
+                  disabled={ownResetBusy || Boolean(ownResetNotice)}
+                  className="mt-1 flex h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"
+                  required
+                />
+              </label>
+              <label className="block text-xs font-medium text-slate-600" htmlFor="own-new-password">
+                Nova senha
+                <input
+                  id="own-new-password"
+                  type="password"
+                  autoComplete="new-password"
+                  value={ownNewPassword}
+                  onChange={(event) => setOwnNewPassword(event.target.value)}
+                  disabled={ownResetBusy || Boolean(ownResetNotice)}
+                  className="mt-1 flex h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"
+                  required
+                />
+              </label>
+              <label className="block text-xs font-medium text-slate-600" htmlFor="own-confirm-password">
+                Confirmar nova senha
+                <input
+                  id="own-confirm-password"
+                  type="password"
+                  autoComplete="new-password"
+                  value={ownConfirmPassword}
+                  onChange={(event) => setOwnConfirmPassword(event.target.value)}
+                  disabled={ownResetBusy || Boolean(ownResetNotice)}
+                  className="mt-1 flex h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"
+                  required
+                />
+              </label>
+              <p className="text-[11px] leading-relaxed text-slate-500">{PASSWORD_POLICY_MESSAGE}</p>
+            </div>
+            {ownResetError && (
+              <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{ownResetError}</p>
+            )}
+            {ownResetNotice && (
+              <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{ownResetNotice}</p>
+            )}
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeOwnPassword}
+                className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 cursor-pointer"
+              >
+                Fechar
+              </button>
+              <button
+                type="submit"
+                disabled={ownResetBusy || Boolean(ownResetNotice)}
+                className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60 cursor-pointer"
+              >
+                {ownResetBusy ? 'Salvando...' : 'Salvar nova senha'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

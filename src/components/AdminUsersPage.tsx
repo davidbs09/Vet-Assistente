@@ -16,6 +16,7 @@ import {
 
 export interface AdminUsersPageProps {
   currentUserId: string;
+  onResetOwnPassword: () => void;
 }
 
 function emailsMatch(typed: string, actual?: string | null): boolean {
@@ -29,7 +30,7 @@ function emailNote(result: AdminActionResult, fallbackTo?: string): string {
   return ' O e-mail não foi enviado.';
 }
 
-function AdminUsersPage({ currentUserId }: AdminUsersPageProps) {
+function AdminUsersPage({ currentUserId, onResetOwnPassword }: AdminUsersPageProps) {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -159,6 +160,14 @@ function AdminUsersPage({ currentUserId }: AdminUsersPageProps) {
         >
           {busyId === 'test-email' ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
           Enviar e-mail de teste para o admin
+        </button>
+        <button
+          type="button"
+          onClick={onResetOwnPassword}
+          className="ml-2 mt-3 inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+        >
+          <KeyRound className="mr-1.5 h-3.5 w-3.5" />
+          Trocar minha senha
         </button>
       </div>
 

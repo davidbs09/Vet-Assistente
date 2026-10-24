@@ -317,7 +317,9 @@ export default function LoginPage({
                     ? 'Não foi possível enviar a solicitação'
                     : view === 'new-password'
                       ? 'Não foi possível salvar a nova senha'
-                      : 'Não foi possível autenticar'}
+                      : view === 'forgot'
+                        ? 'Não foi possível enviar o pedido'
+                        : 'Não foi possível autenticar'}
               </div>
               <p className="leading-relaxed">{feedback}</p>
             </div>

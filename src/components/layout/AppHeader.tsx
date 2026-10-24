@@ -7,6 +7,7 @@ export default function AppHeader({
   isAdmin,
   onGoHome,
   onOpenAdmin,
+  onResetOwnPassword,
   onLogout,
 }: {
   displayName?: string | null;
@@ -14,6 +15,7 @@ export default function AppHeader({
   isAdmin: boolean;
   onGoHome: () => void;
   onOpenAdmin: () => void;
+  onResetOwnPassword: () => void;
   onLogout: () => void;
 }) {
   const label = displayName || email || 'U';
@@ -41,6 +43,16 @@ export default function AppHeader({
               className="hidden sm:flex items-center gap-1.5 rounded-full bg-slate-900 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-slate-800 cursor-pointer"
             >
               Acessos
+            </button>
+          )}
+
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={onResetOwnPassword}
+              className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 cursor-pointer"
+            >
+              Minha senha
             </button>
           )}
 

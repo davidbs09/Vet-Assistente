@@ -3,6 +3,9 @@ import {
   db,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  updatePassword,
   updateProfile,
   signOut,
   doc,
@@ -301,6 +304,72 @@ export async function requestPasswordReset(identifier: string): Promise<void> {
 
   if (!response.ok) {
     throw authError(await readApiError(response), 'auth/reset-request-failed');
+  }
+}
+
+export async function changeOwnPassword(currentPassword: string, newPassword: string): Promise<void> {
+  if (!currentPassword) {
+    throw authError('Informe a senha atual.', 'auth/invalid-credential');
+  }
+  const passwordError = validateNewPassword(newPassword, newPassword);
+  if (passwordError) {
+    throw authError(passwordError, 'auth/weak-password');
+  }
+  if (currentPassword === newPassword) {
+    throw authError('A nova senha precisa ser diferente da atual.', 'auth/weak-password');
+  }
+
+  const user = auth.currentUser;
+  const email = user?.email?.trim().toLowerCase() || '';
+  if (!user || !email) {
+    throw authError('Sessão inválida. Entre novamente.', 'auth/unauthenticated');
+  }
+
+  const profile = await getUserProfile(user.uid);
+  if (!isAdminProfile(profile, email)) {
+    throw authError('Apenas o administrador troca a própria senha por aqui.', 'auth/admin-action-failed');
+  }
+
+  try {
+    const credential = EmailAuthProvider.credential(email, currentPassword);
+    await reauthenticateWithCredential(user, credential);
+    await updatePassword(user, newPassword);
+  } catch (error: unknown) {
+    const code = typeof error === 'object' && error && 'code' in error
+      ? String((error as { code?: string }).code)
+      : '';
+    if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+      throw authError('A senha atual não confere.', 'auth/reset-complete-failed');
+    }
+    if (code === 'auth/too-many-requests') {
+      throw authError('Muitas tentativas. Aguarde um momento e tente novamente.', 'auth/too-many-requests');
+    }
+    throw authError('Não foi possível trocar a senha agora. Tente novamente.', 'auth/reset-complete-failed');
+  }
+
+  const token = await user.getIdToken(true);
+  const response = await fetch('/api/auth/revoke-own-sessions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({}),
+  });
+  if (!response.ok) {
+    throw authError(
+      'A senha foi atualizada, mas as outras sessões não foram encerradas. Entre novamente com a nova senha.',
+      'auth/reset-complete-failed'
+    );
+  }
+
+  beginAuthQuietPeriod();
+  try {
+    await signInWithEmailAndPassword(auth, email, newPassword);
+  } catch {
+    throw authError('A senha foi atualizada. Entre novamente com a nova senha.', 'auth/reset-complete-failed');
+  } finally {
+    endAuthQuietPeriod();
   }
 }
 

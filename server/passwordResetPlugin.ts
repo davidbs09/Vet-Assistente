@@ -28,6 +28,8 @@ type EnvMap = Record<string, string | undefined>;
 const RESET_COLLECTION = 'passwordResets';
 const USERS_COLLECTION = 'users';
 const SESSIONS_COLLECTION = 'userSessions';
+const ADMIN_RESET_DENIED =
+  'A conta de administrador não recupera senha por aqui. Entre no sistema e troque a senha em Minha senha.';
 
 export function hashEmailKey(email: string): string {
   return createHash('sha256').update(email.trim().toLowerCase()).digest('hex');
@@ -322,6 +324,41 @@ async function handleAdminReset(req: IncomingMessage, res: ServerResponse, env: 
   sendJson(res, 200, {ok: true, ...emailPayload(emailResult)});
 }
 
+function isConfiguredAdminEmail(env: EnvMap, email: string): boolean {
+  const adminEmail = String(env.VITE_ADMIN_EMAIL || '').trim().toLowerCase();
+  return Boolean(adminEmail && email === adminEmail);
+}
+
+async function handleRevokeOwnSessions(req: IncomingMessage, res: ServerResponse, env: EnvMap): Promise<void> {
+  const token = bearerToken(req);
+  if (!token) {
+    sendJson(res, 401, {error: 'Sessão inválida. Entre novamente.'});
+    return;
+  }
+
+  const app = initAdminApp(env);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  const decoded = await auth.verifyIdToken(token, true);
+  const callerSnap = await db.collection(USERS_COLLECTION).doc(decoded.uid).get();
+  const record = await auth.getUser(decoded.uid);
+  const email = String(record.email || '').trim().toLowerCase();
+  if (!callerSnap.exists || (!isAdminProfile(callerSnap.data()) && !isConfiguredAdminEmail(env, email))) {
+    sendJson(res, 403, {error: 'Apenas o administrador pode encerrar as próprias sessões por aqui.'});
+    return;
+  }
+
+  await auth.revokeRefreshTokens(decoded.uid);
+  await db.collection(SESSIONS_COLLECTION).doc(decoded.uid).set(
+    {
+      isActive: false,
+      updatedAt: FieldValue.serverTimestamp(),
+    },
+    {merge: true}
+  );
+  sendJson(res, 200, {ok: true});
+}
+
 async function handleRequestReset(req: IncomingMessage, res: ServerResponse, env: EnvMap): Promise<void> {
   const body = await readJsonBody(req);
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
@@ -346,7 +383,12 @@ async function handleRequestReset(req: IncomingMessage, res: ServerResponse, env
   const userRef = db.collection(USERS_COLLECTION).doc(uid);
   const userSnap = await userRef.get();
   const profile = userSnap.data() || {};
-  if (!userSnap.exists || isAdminProfile(profile)) {
+  if (isConfiguredAdminEmail(env, email) || (userSnap.exists && isAdminProfile(profile))) {
+    sendJson(res, 403, {error: ADMIN_RESET_DENIED, code: 'admin-password-reset-disabled'});
+    return;
+  }
+
+  if (!userSnap.exists) {
     sendJson(res, 200, {ok: true});
     return;
   }
@@ -542,6 +584,7 @@ function attachPasswordResetRoutes(server: ViteDevServer, env: EnvMap): void {
       path !== '/api/admin/reset-password'
       && path !== '/api/auth/complete-password-reset'
       && path !== '/api/auth/request-password-reset'
+      && path !== '/api/auth/revoke-own-sessions'
       && path !== '/api/auth/request-access'
       && path !== '/api/admin/set-access'
       && path !== '/api/admin/test-email'
@@ -562,6 +605,10 @@ function attachPasswordResetRoutes(server: ViteDevServer, env: EnvMap): void {
       }
       if (path === '/api/auth/request-password-reset') {
         await handleRequestReset(req, res, env);
+        return;
+      }
+      if (path === '/api/auth/revoke-own-sessions') {
+        await handleRevokeOwnSessions(req, res, env);
         return;
       }
       if (path === '/api/auth/request-access') {

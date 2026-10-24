@@ -1,13 +1,13 @@
 export const SUPPORT_CONTACTS = {
   phone: {
     label: 'Ligação',
-    value: '(11) 99999-0000',
-    href: 'tel:+5511999990000',
+    value: '(11) 91224-9166',
+    href: 'tel:+5511912249166',
   },
   whatsapp: {
     label: 'WhatsApp',
-    value: '(11) 99999-0000',
-    href: 'https://wa.me/5511999990000',
+    value: '(91) 98491-6251',
+    href: 'https://wa.me/5591984916251',
   },
   email: {
     label: 'E-mail',
