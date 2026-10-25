@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   auth, db, signOut, onAuthStateChanged,
   collection, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc,
@@ -77,6 +77,7 @@ export default function App() {
   const [ownCurrentPassword, setOwnCurrentPassword] = useState('');
   const [ownNewPassword, setOwnNewPassword] = useState('');
   const [ownConfirmPassword, setOwnConfirmPassword] = useState('');
+  const ownResetTimer = useRef<number | null>(null);
   const [authSubmitting, setAuthSubmitting] = useState(false);
 
   const checkSession = async (currentUser: User) => {
@@ -499,13 +500,31 @@ export default function App() {
     }
   };
 
+  const clearOwnResetTimer = () => {
+    if (ownResetTimer.current !== null) {
+      window.clearTimeout(ownResetTimer.current);
+      ownResetTimer.current = null;
+    }
+  };
+
   const closeOwnPassword = () => {
+    clearOwnResetTimer();
     setOwnResetOpen(false);
     setOwnResetError(null);
     setOwnResetNotice(null);
     setOwnCurrentPassword('');
     setOwnNewPassword('');
     setOwnConfirmPassword('');
+  };
+
+  const openOwnPassword = () => {
+    clearOwnResetTimer();
+    setOwnCurrentPassword('');
+    setOwnNewPassword('');
+    setOwnConfirmPassword('');
+    setOwnResetError(null);
+    setOwnResetNotice(null);
+    setOwnResetOpen(true);
   };
 
   const handleChangeOwnPassword = async (event: React.FormEvent) => {
@@ -523,6 +542,13 @@ export default function App() {
       setOwnNewPassword('');
       setOwnConfirmPassword('');
       setOwnResetNotice('Senha atualizada. As outras sessões desta conta foram encerradas.');
+      clearOwnResetTimer();
+      ownResetTimer.current = window.setTimeout(() => {
+        ownResetTimer.current = null;
+        setOwnResetOpen(false);
+        setOwnResetError(null);
+        setOwnResetNotice(null);
+      }, 1800);
     } catch (error: unknown) {
       console.error('Own password change error:', error);
       setOwnResetError(mapAuthError(error));
@@ -752,14 +778,7 @@ export default function App() {
         isAdmin={isAdminProfile(userProfile, user.email)}
         onGoHome={() => { setView('dashboard'); setSelectedPatient(null); }}
         onOpenAdmin={() => setView('admin')}
-        onResetOwnPassword={() => {
-          setOwnCurrentPassword('');
-          setOwnNewPassword('');
-          setOwnConfirmPassword('');
-          setOwnResetOpen(true);
-          setOwnResetError(null);
-          setOwnResetNotice(null);
-        }}
+        onResetOwnPassword={openOwnPassword}
         onLogout={handleLogout}
       />
 
@@ -774,14 +793,7 @@ export default function App() {
             >
               <AdminUsersPage
                 currentUserId={user.uid}
-                onResetOwnPassword={() => {
-                  setOwnCurrentPassword('');
-                  setOwnNewPassword('');
-                  setOwnConfirmPassword('');
-                  setOwnResetOpen(true);
-                  setOwnResetError(null);
-                  setOwnResetNotice(null);
-                }}
+                onResetOwnPassword={openOwnPassword}
               />
             </motion.div>
           )}

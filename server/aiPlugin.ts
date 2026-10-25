@@ -158,6 +158,27 @@ function isTimeoutError(error: unknown): boolean {
     || message.includes('tempo limite');
 }
 
+const AI_RETRY_DELAYS_MS = [1500, 3000, 6000];
+
+function isBusyError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  const status = typeof error === 'object' && error && 'status' in error
+    ? Number((error as {status?: number}).status)
+    : 0;
+  return status === 429
+    || status === 503
+    || message.includes('"code":503')
+    || message.includes('RESOURCE_EXHAUSTED')
+    || message.includes('quota')
+    || message.includes('UNAVAILABLE')
+    || message.includes('overloaded')
+    || message.includes('high demand');
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 const AI_BUSY = 'O sistema está com alta demanda. Por favor, gere o relatório novamente.';
 const AI_TIMEOUT = 'O sistema demorou para responder. Por favor, gere o relatório novamente.';
 const AI_FAILED = 'Não foi possível gerar o relatório agora. Por favor, gere novamente.';
@@ -171,7 +192,7 @@ function mapAiError(error: unknown): {status: number; message: string} {
   if (isTimeoutError(error) || message.includes('tempo limite')) {
     return {status: 504, message: AI_TIMEOUT};
   }
-  if (status === 429 || status === 503 || message.includes('RESOURCE_EXHAUSTED') || message.includes('quota') || message.includes('UNAVAILABLE') || message.includes('overloaded')) {
+  if (isBusyError(error)) {
     return {status: status === 429 ? 429 : 503, message: AI_BUSY};
   }
   if (status === 401 || message.includes('API_KEY_INVALID') || message.includes('API key not valid') || message.includes('invalid api key') || message.includes('GEMINI_API_KEY não configurada')) {
@@ -212,19 +233,31 @@ async function generateText(
   step: AdviceStep,
 ): Promise<string> {
   const client = createClient(env);
-  const response = await client.models.generateContent({
-    model: AI_CONFIG.model,
-    contents: [{role: 'user', parts}],
-    config: {
-      systemInstruction,
-      temperature: AI_CONFIG.temperature,
-      topP: AI_CONFIG.topP,
-      maxOutputTokens: AI_CONFIG.maxOutputTokens,
-      responseMimeType: 'application/json',
-      ...(withSchema ? {responseSchema: schemaForStep(step)} : {}),
-    },
-  });
-  return responseText(response);
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= AI_RETRY_DELAYS_MS.length; attempt += 1) {
+    try {
+      const response = await client.models.generateContent({
+        model: AI_CONFIG.model,
+        contents: [{role: 'user', parts}],
+        config: {
+          systemInstruction,
+          temperature: AI_CONFIG.temperature,
+          topP: AI_CONFIG.topP,
+          maxOutputTokens: AI_CONFIG.maxOutputTokens,
+          responseMimeType: 'application/json',
+          ...(withSchema ? {responseSchema: schemaForStep(step)} : {}),
+        },
+      });
+      return responseText(response);
+    } catch (error) {
+      lastError = error;
+      const delay = AI_RETRY_DELAYS_MS[attempt];
+      if (!isBusyError(error) || delay === undefined) throw error;
+      console.error(`IA ocupada. Nova tentativa em ${delay}ms.`);
+      await sleep(delay);
+    }
+  }
+  throw lastError;
 }
 
 async function handleAdvice(req: IncomingMessage, res: ServerResponse, env: EnvMap): Promise<void> {
