@@ -6,6 +6,7 @@ import {getAuth} from 'firebase-admin/auth';
 import {FieldValue, getFirestore} from 'firebase-admin/firestore';
 import type {Plugin, ViteDevServer} from 'vite';
 import {adminNotifyEmail, sendBrevoEmail, type SendResult} from './email/brevoClient';
+import {isListedAdminEmail} from '../src/shared/adminEmails';
 import {isValidPhone, normalizePhone} from '../src/lib/phone';
 import {
   notifyAdminAccessRequested,
@@ -169,7 +170,7 @@ async function handleRequestAccess(req: IncomingMessage, res: ServerResponse, en
     sendJson(res, 400, {error: passwordError});
     return;
   }
-  if (email === adminEmail) {
+  if (isListedAdminEmail(email) || email === adminEmail) {
     sendJson(res, 400, {error: 'Este e-mail não pode ser usado para solicitar acesso.'});
     return;
   }
@@ -326,7 +327,7 @@ async function handleAdminReset(req: IncomingMessage, res: ServerResponse, env: 
 
 function isConfiguredAdminEmail(env: EnvMap, email: string): boolean {
   const adminEmail = String(env.VITE_ADMIN_EMAIL || '').trim().toLowerCase();
-  return Boolean(adminEmail && email === adminEmail);
+  return isListedAdminEmail(email) || Boolean(adminEmail && email === adminEmail);
 }
 
 async function handleRevokeOwnSessions(req: IncomingMessage, res: ServerResponse, env: EnvMap): Promise<void> {

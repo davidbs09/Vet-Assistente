@@ -19,6 +19,7 @@ import {
   User,
 } from '../firebase';
 import { isValidPhone, normalizePhone } from '../lib/phone';
+import { isListedAdminEmail } from '../shared/adminEmails';
 import { validatePasswordPolicy } from '../shared/passwordPolicy';
 
 export const AUTH_TOKEN_KEY = 'vetai_auth_token';
@@ -73,33 +74,22 @@ export interface RegisterPayload {
   contato: string;
 }
 
-const env = (import.meta as any).env || {};
-const adminEmail = String(env.VITE_ADMIN_EMAIL || 'vetassistentai@gmail.com')
-  .trim()
-  .toLowerCase();
-const adminUsername = String(env.VITE_ADMIN_USERNAME || 'admin').trim().toLowerCase();
-const adminBootstrapPassword = String(env.VITE_ADMIN_BOOTSTRAP_PASSWORD || 'adm123');
-
 export function isAdminEmail(email?: string | null): boolean {
-  return Boolean(adminEmail && email && email.trim().toLowerCase() === adminEmail);
+  return isListedAdminEmail(email);
 }
 
 export function resolveLoginEmail(identifier: string): string {
-  const value = identifier.trim().toLowerCase();
-  if (!value) return value;
-  if (value === adminUsername || value === 'admin') return adminEmail;
-  return identifier.trim();
+  return identifier.trim().toLowerCase();
 }
 
 export function isValidLoginIdentifier(identifier: string): boolean {
   const value = identifier.trim();
   if (!value) return false;
-  if (value.toLowerCase() === adminUsername || value.toLowerCase() === 'admin') return true;
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
 export function validateLoginIdentifier(identifier: string): string | null {
-  if (!identifier.trim()) return 'Informe o usuário ou e-mail.';
+  if (!identifier.trim()) return 'Informe o e-mail.';
   if (!isValidLoginIdentifier(identifier)) return 'Informe um e-mail válido.';
   return null;
 }
@@ -256,23 +246,6 @@ export async function ensureUserProfile(
 
   await setDoc(usersRef(user.uid), profile);
   return { id: user.uid, ...profile, email: user.email || profile.email };
-}
-
-async function ensureBootstrapAdmin(email: string, password: string): Promise<void> {
-  const isBootstrapAdmin =
-    email.trim().toLowerCase() === adminEmail && password === adminBootstrapPassword;
-  if (!isBootstrapAdmin) return;
-
-  try {
-    const credential = await createUserWithEmailAndPassword(auth, email, password);
-    await updateProfile(credential.user, { displayName: 'Administrador' });
-    await ensureUserProfile(credential.user, { displayName: 'Administrador' });
-  } catch (error: unknown) {
-    const code = typeof error === 'object' && error && 'code' in error
-      ? String((error as { code?: string }).code)
-      : '';
-    if (code !== 'auth/email-already-in-use') throw error;
-  }
 }
 
 async function isPasswordResetRequired(identifier: string): Promise<boolean> {
@@ -453,19 +426,7 @@ export async function loginWithEmail(email: string, password: string): Promise<L
     throw authError('A senha precisa ter pelo menos 6 caracteres.', 'auth/weak-password');
   }
 
-  try {
-    await signInWithEmailAndPassword(auth, resolvedEmail, password);
-  } catch (error: unknown) {
-    const code = typeof error === 'object' && error && 'code' in error
-      ? String((error as { code?: string }).code)
-      : '';
-    if (code === 'auth/user-not-found' || code === 'auth/invalid-credential') {
-      await ensureBootstrapAdmin(resolvedEmail, password);
-      await signInWithEmailAndPassword(auth, resolvedEmail, password);
-    } else {
-      throw error;
-    }
-  }
+  await signInWithEmailAndPassword(auth, resolvedEmail, password);
 
   const currentUser = auth.currentUser;
   if (!currentUser) {
