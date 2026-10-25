@@ -379,7 +379,6 @@ export default function LoginPage({
                       if (formError) setFormError(null);
                     }}
                     disabled={submitting}
-                    placeholder="vetassistentai@gmail.com"
                     required
                   />
                 </div>
