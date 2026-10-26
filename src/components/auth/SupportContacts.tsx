@@ -7,7 +7,7 @@ export default function SupportContacts() {
     <div className="space-y-1.5 text-xs">
       {items.map((item) => (
         <div key={item.label} className="flex items-baseline gap-3">
-          <span className="w-16 shrink-0 text-slate-400">{item.label}</span>
+          <span className="shrink-0 font-bold text-slate-800">{item.label}</span>
           <a
             href={item.href}
             target={item.href.startsWith('http') ? '_blank' : undefined}
