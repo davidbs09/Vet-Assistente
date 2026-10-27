@@ -1,0 +1,22 @@
+{
+  "provider": "google-ai-studio",
+  "displayName": "Google AI Studio",
+  "project": "projects/405141264331",
+  "projectNumber": "405141264331",
+  "apiKeyName": "API Key Vet Assistente AI",
+  "model": "gemini-3.5-flash-lite",
+  "routes": {
+    "advice": "/api/ai/advice",
+    "transcribe": "/api/ai/transcribe"
+  },
+  "apiKeyEnv": [
+    "GEMINI_API_KEY",
+    "GOOGLE_GENAI_API_KEY",
+    "GOOGLE_API_KEY",
+    "AI_STUDIO_API_KEY"
+  ],
+  "timeoutMs": 240000,
+  "maxOutputTokens": 16384,
+  "temperature": 0.2,
+  "topP": 0.6
+}

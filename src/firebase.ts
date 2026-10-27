@@ -1,9 +1,37 @@
 import { initializeApp, getApps } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, User } from 'firebase/auth';
-import { getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where, orderBy, onSnapshot, Timestamp, serverTimestamp } from 'firebase/firestore';
+import {
+  getAuth,
+  setPersistence,
+  browserLocalPersistence,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  updatePassword,
+  updateProfile,
+  signOut,
+  onAuthStateChanged,
+  User,
+} from 'firebase/auth';
+import {
+  getFirestore,
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  setDoc,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  query,
+  where,
+  orderBy,
+  onSnapshot,
+  Timestamp,
+  serverTimestamp,
+} from 'firebase/firestore';
 import defaultFirebaseConfig from '../firebase-applet-config.json';
 
-// Supports pre-packaged config and optional custom deployment environment variables
 const env = (import.meta as any).env || {};
 const firebaseConfig = {
   apiKey: env.VITE_FIREBASE_API_KEY || defaultFirebaseConfig.apiKey,
@@ -17,11 +45,33 @@ const firebaseConfig = {
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 export const auth = getAuth(app);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId || undefined);
-export const googleProvider = new GoogleAuthProvider();
-googleProvider.setCustomParameters({
-  prompt: 'select_account'
+void setPersistence(auth, browserLocalPersistence).catch(() => {
+  // If persistence is unavailable (private mode, blocked storage), login still works.
 });
+export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId || undefined);
 
-export { signInWithPopup, signOut, onAuthStateChanged, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where, orderBy, onSnapshot, Timestamp, serverTimestamp };
+export {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  updatePassword,
+  updateProfile,
+  signOut,
+  onAuthStateChanged,
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  setDoc,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  query,
+  where,
+  orderBy,
+  onSnapshot,
+  Timestamp,
+  serverTimestamp,
+};
 export type { User };

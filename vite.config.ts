@@ -2,16 +2,15 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import {defineConfig, loadEnv} from 'vite';
+import {passwordResetPlugin} from './server/passwordResetPlugin';
+import {aiPlugin} from './server/aiPlugin';
 
 export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
-  const apiKey = env.GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
+  const serverEnv = {...process.env, ...env};
   return {
     base: './',
-    plugins: [react(), tailwindcss()],
-    define: {
-      'process.env.GEMINI_API_KEY': JSON.stringify(apiKey),
-    },
+    plugins: [react(), tailwindcss(), passwordResetPlugin(serverEnv), aiPlugin(serverEnv)],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
@@ -21,6 +20,12 @@ export default defineConfig(({mode}) => {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
+    },
+    preview: {
+      host: '0.0.0.0',
+      port: Number(process.env.PORT) || 4173,
+      strictPort: true,
+      allowedHosts: ['ajudavoce.com.br', 'www.ajudavoce.com.br', '.hostingersite.com'],
     },
   };
 });

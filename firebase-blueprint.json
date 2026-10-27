@@ -60,6 +60,36 @@
       },
       "required": ["patientId", "date", "createdBy"]
     },
+    "AppUser": {
+      "title": "AppUser",
+      "description": "Veterinary user profile stored in Firestore. Password lives in Firebase Auth; access is gated by status.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "crmv": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "user"] },
+        "status": { "type": "string", "enum": ["pending", "active", "revoked"] },
+        "mustResetPassword": { "type": "boolean" },
+        "passwordResetAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "activatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "displayName", "role", "status"]
+    },
+    "PasswordReset": {
+      "title": "PasswordReset",
+      "description": "Hashed-email lookup used before login when the admin emptied the account password.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "requestedAt": { "type": "string", "format": "date-time" },
+        "requestedBy": { "type": "string" }
+      },
+      "required": ["uid", "email"]
+    },
     "UserSession": {
       "title": "UserSession",
       "description": "Single active session record for concurrent login prevention.",
@@ -87,6 +117,14 @@
     "/prescriptions/{prescriptionId}": {
       "schema": "Prescription",
       "description": "Collection of prescriptions."
+    },
+    "/users/{userId}": {
+      "schema": "AppUser",
+      "description": "User profiles created on register. Pending until an admin activates the account. mustResetPassword blocks access until a new password is set."
+    },
+    "/passwordResets/{hash}": {
+      "schema": "PasswordReset",
+      "description": "SHA-256(email) documents that let the login screen detect an emptied password without listing users."
     },
     "/userSessions/{userId}": {
       "schema": "UserSession",
