@@ -5,6 +5,7 @@ import {
   query, where, onSnapshot, Timestamp, serverTimestamp, User
 } from './firebase';
 import { AnimatePresence, motion } from 'framer-motion';
+import { Eye, EyeOff } from 'lucide-react';
 import LoginPage, { RegisterFormValues } from './components/LoginPage';
 import AdminUsersPage from './components/AdminUsersPage';
 import NewConsultationView from './components/NewConsultationView';
@@ -47,6 +48,50 @@ import { handleFirestoreError, OperationType, testConnection } from './lib/fires
 import { clearBrowserSession, getOrCreateSessionId, hasBrowserSession, markBrowserSession } from './lib/session';
 import type { AppView, Consultation, Patient, SessionStatus } from './types/clinical';
 import { PASSWORD_POLICY_MESSAGE } from './shared/passwordPolicy';
+
+function OwnPasswordField({
+  id,
+  label,
+  autoComplete,
+  value,
+  onChange,
+  disabled,
+}: {
+  id: string;
+  label: string;
+  autoComplete: string;
+  value: string;
+  onChange: (value: string) => void;
+  disabled: boolean;
+}) {
+  const [visible, setVisible] = useState(false);
+
+  return (
+    <label className="block text-xs font-medium text-slate-600" htmlFor={id}>
+      {label}
+      <div className="relative mt-1">
+        <input
+          id={id}
+          type={visible ? 'text' : 'password'}
+          autoComplete={autoComplete}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          disabled={disabled}
+          className="flex h-10 w-full rounded-lg border border-slate-200 px-3 pr-10 text-sm"
+          required
+        />
+        <button
+          type="button"
+          onClick={() => setVisible((current) => !current)}
+          className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-slate-400 hover:text-slate-700 cursor-pointer"
+          aria-label={visible ? 'Esconder senha' : 'Exibir senha'}
+        >
+          {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+        </button>
+      </div>
+    </label>
+  );
+}
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -885,45 +930,30 @@ export default function App() {
               A troca acontece aqui, com você logado. Informe a senha atual. Ao salvar, a senha antiga deixa de funcionar e as outras sessões desta conta são encerradas.
             </p>
             <div className="mt-4 space-y-3">
-              <label className="block text-xs font-medium text-slate-600" htmlFor="own-current-password">
-                Senha atual
-                <input
-                  id="own-current-password"
-                  type="password"
-                  autoComplete="current-password"
-                  value={ownCurrentPassword}
-                  onChange={(event) => setOwnCurrentPassword(event.target.value)}
-                  disabled={ownResetBusy || Boolean(ownResetNotice)}
-                  className="mt-1 flex h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"
-                  required
-                />
-              </label>
-              <label className="block text-xs font-medium text-slate-600" htmlFor="own-new-password">
-                Nova senha
-                <input
-                  id="own-new-password"
-                  type="password"
-                  autoComplete="new-password"
-                  value={ownNewPassword}
-                  onChange={(event) => setOwnNewPassword(event.target.value)}
-                  disabled={ownResetBusy || Boolean(ownResetNotice)}
-                  className="mt-1 flex h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"
-                  required
-                />
-              </label>
-              <label className="block text-xs font-medium text-slate-600" htmlFor="own-confirm-password">
-                Confirmar nova senha
-                <input
-                  id="own-confirm-password"
-                  type="password"
-                  autoComplete="new-password"
-                  value={ownConfirmPassword}
-                  onChange={(event) => setOwnConfirmPassword(event.target.value)}
-                  disabled={ownResetBusy || Boolean(ownResetNotice)}
-                  className="mt-1 flex h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"
-                  required
-                />
-              </label>
+              <OwnPasswordField
+                id="own-current-password"
+                label="Senha atual"
+                autoComplete="current-password"
+                value={ownCurrentPassword}
+                onChange={setOwnCurrentPassword}
+                disabled={ownResetBusy || Boolean(ownResetNotice)}
+              />
+              <OwnPasswordField
+                id="own-new-password"
+                label="Nova senha"
+                autoComplete="new-password"
+                value={ownNewPassword}
+                onChange={setOwnNewPassword}
+                disabled={ownResetBusy || Boolean(ownResetNotice)}
+              />
+              <OwnPasswordField
+                id="own-confirm-password"
+                label="Confirmar nova senha"
+                autoComplete="new-password"
+                value={ownConfirmPassword}
+                onChange={setOwnConfirmPassword}
+                disabled={ownResetBusy || Boolean(ownResetNotice)}
+              />
               <p className="text-[11px] leading-relaxed text-slate-500">{PASSWORD_POLICY_MESSAGE}</p>
             </div>
             {ownResetError && (
