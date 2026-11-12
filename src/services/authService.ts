@@ -18,6 +18,7 @@ import {
   serverTimestamp,
   User,
 } from '../firebase';
+import type { UserBackup } from '../lib/backupDocument';
 import { isValidPhone, normalizePhone } from '../lib/phone';
 import { isListedAdminEmail } from '../shared/adminEmails';
 import { validatePasswordPolicy } from '../shared/passwordPolicy';
@@ -621,6 +622,9 @@ export type AdminActionResult = {
   emailTo?: string;
   emailError?: string | null;
   emailId?: string | null;
+  patients?: number;
+  consultations?: number;
+  prescriptions?: number;
 };
 
 async function postAdminAction(path: string, body: Record<string, unknown>): Promise<AdminActionResult> {
@@ -651,6 +655,25 @@ export async function activateUser(userId: string): Promise<AdminActionResult> {
 
 export async function revokeUserAccess(userId: string): Promise<AdminActionResult> {
   return postAdminAction('/api/admin/set-access', {userId, action: 'revoke'});
+}
+
+export async function deleteUserHistory(userId: string): Promise<AdminActionResult> {
+  return postAdminAction('/api/admin/delete-history', {userId});
+}
+
+export async function deleteUserRegistration(userId: string): Promise<AdminActionResult> {
+  return postAdminAction('/api/admin/delete-registration', {userId});
+}
+
+export async function fetchUserBackup(userId: string): Promise<UserBackup> {
+  const payload = await postAdminAction('/api/admin/backup', {userId}) as AdminActionResult & Partial<UserBackup>;
+  if (!payload.professional) {
+    throw authError('Não foi possível montar o backup.', 'auth/admin-action-failed');
+  }
+  return {
+    professional: payload.professional,
+    patients: Array.isArray(payload.patients) ? payload.patients : [],
+  };
 }
 
 export async function sendAdminTestEmail(to?: string): Promise<AdminActionResult> {

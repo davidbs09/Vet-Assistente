@@ -3,7 +3,7 @@ import {readFileSync} from 'fs';
 import type {IncomingMessage, ServerResponse} from 'http';
 import {cert, getApps, initializeApp, type App} from 'firebase-admin/app';
 import {getAuth} from 'firebase-admin/auth';
-import {FieldValue, getFirestore} from 'firebase-admin/firestore';
+import {FieldValue, getFirestore, type Firestore} from 'firebase-admin/firestore';
 import type {Plugin, ViteDevServer} from 'vite';
 import {adminNotifyEmail, sendBrevoEmail, type SendResult} from './email/brevoClient';
 import {isListedAdminEmail} from '../src/shared/adminEmails';
@@ -479,6 +479,254 @@ async function handleSetAccess(req: IncomingMessage, res: ServerResponse, env: E
   sendJson(res, 200, {ok: true, action, ...emailPayload(emailResult)});
 }
 
+const CLINICAL_COLLECTIONS = ['patients', 'consultations', 'prescriptions'] as const;
+
+async function deleteOwnedDocuments(db: Firestore, collectionName: string, uid: string): Promise<number> {
+  let total = 0;
+  for (let round = 0; round < 50; round += 1) {
+    const snap = await db.collection(collectionName).where('createdBy', '==', uid).limit(400).get();
+    if (snap.empty) return total;
+    const batch = db.batch();
+    snap.docs.forEach((item) => batch.delete(item.ref));
+    await batch.commit();
+    total += snap.size;
+  }
+  return total;
+}
+
+async function deleteClinicalHistory(db: Firestore, uid: string): Promise<{patients: number; consultations: number; prescriptions: number}> {
+  const [patients, consultations, prescriptions] = await Promise.all(
+    CLINICAL_COLLECTIONS.map((name) => deleteOwnedDocuments(db, name, uid)),
+  );
+  return {patients, consultations, prescriptions};
+}
+
+function isMissingAuthUser(error: unknown): boolean {
+  return typeof error === 'object'
+    && error !== null
+    && 'code' in error
+    && (error as {code?: string}).code === 'auth/user-not-found';
+}
+
+async function requireManagedUser(req: IncomingMessage, res: ServerResponse, env: EnvMap): Promise<{
+  auth: ReturnType<typeof getAuth>;
+  db: Firestore;
+  userId: string;
+  email: string;
+  displayName: string;
+} | null> {
+  const token = bearerToken(req);
+  if (!token) {
+    sendJson(res, 401, {error: 'Sessão de administrador inválida.'});
+    return null;
+  }
+
+  const body = await readJsonBody(req);
+  const userId = typeof body.userId === 'string' ? body.userId.trim() : '';
+  if (!userId) {
+    sendJson(res, 400, {error: 'Informe o usuário.'});
+    return null;
+  }
+
+  const app = initAdminApp(env);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  const decoded = await auth.verifyIdToken(token, true);
+  const callerSnap = await db.collection(USERS_COLLECTION).doc(decoded.uid).get();
+  if (!callerSnap.exists || !isAdminProfile(callerSnap.data())) {
+    sendJson(res, 403, {error: 'Apenas o administrador pode excluir cadastro ou histórico.'});
+    return null;
+  }
+
+  if (userId === decoded.uid) {
+    sendJson(res, 400, {error: 'Você não pode excluir o próprio cadastro ou histórico por aqui.'});
+    return null;
+  }
+
+  const targetSnap = await db.collection(USERS_COLLECTION).doc(userId).get();
+  if (!targetSnap.exists) {
+    sendJson(res, 404, {error: 'Usuário não encontrado.'});
+    return null;
+  }
+
+  const target = targetSnap.data() || {};
+  const email = String(target.email || '').trim().toLowerCase();
+  if (isAdminProfile(target) || isConfiguredAdminEmail(env, email)) {
+    sendJson(res, 400, {error: 'Não é permitido excluir o cadastro ou o histórico de um administrador.'});
+    return null;
+  }
+
+  return {
+    auth,
+    db,
+    userId,
+    email,
+    displayName: String(target.displayName || ''),
+  };
+}
+
+async function handleDeleteHistory(req: IncomingMessage, res: ServerResponse, env: EnvMap): Promise<void> {
+  const target = await requireManagedUser(req, res, env);
+  if (!target) return;
+
+  const removed = await deleteClinicalHistory(target.db, target.userId);
+  sendJson(res, 200, {ok: true, ...removed});
+}
+
+async function handleDeleteRegistration(req: IncomingMessage, res: ServerResponse, env: EnvMap): Promise<void> {
+  const target = await requireManagedUser(req, res, env);
+  if (!target) return;
+
+  const removed = await deleteClinicalHistory(target.db, target.userId);
+  if (target.email) {
+    await target.db.collection(RESET_COLLECTION).doc(hashEmailKey(target.email)).delete();
+  }
+  await target.db.collection(SESSIONS_COLLECTION).doc(target.userId).delete();
+  try {
+    await target.auth.revokeRefreshTokens(target.userId);
+    await target.auth.deleteUser(target.userId);
+  } catch (error) {
+    if (!isMissingAuthUser(error)) throw error;
+  }
+  await target.db.collection(USERS_COLLECTION).doc(target.userId).delete();
+  sendJson(res, 200, {ok: true, ...removed});
+}
+
+function millisOf(value: unknown): number {
+  if (!value || typeof value !== 'object') return 0;
+  const record = value as {toDate?: () => Date; seconds?: number; _seconds?: number};
+  if (typeof record.toDate === 'function') {
+    const date = record.toDate();
+    return date instanceof Date && !Number.isNaN(date.getTime()) ? date.getTime() : 0;
+  }
+  const seconds = typeof record.seconds === 'number' ? record.seconds : record._seconds;
+  return typeof seconds === 'number' ? seconds * 1000 : 0;
+}
+
+function asText(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
+function asStringList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === 'string' && item.trim() !== '');
+}
+
+function asMedications(value: unknown): Array<{name: string; dosage: string; frequency: string; duration: string; forDiagnosis: string}> {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => {
+    const med = item && typeof item === 'object' ? item as Record<string, unknown> : {};
+    return {
+      name: asText(med.name),
+      dosage: asText(med.dosage),
+      frequency: asText(med.frequency),
+      duration: asText(med.duration),
+      forDiagnosis: asText(med.forDiagnosis),
+    };
+  });
+}
+
+function asDifferentials(value: unknown): Array<{disease: string; likelihood: string}> {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!item || typeof item !== 'object') return [];
+    const row = item as Record<string, unknown>;
+    const disease = asText(row.disease);
+    if (!disease) return [];
+    return [{disease, likelihood: asText(row.likelihood)}];
+  });
+}
+
+function serializeConsultation(id: string, data: Record<string, unknown>) {
+  return {
+    id,
+    patientId: asText(data.patientId),
+    dateMillis: millisOf(data.date),
+    symptoms: asText(data.symptoms),
+    diagnosis: asText(data.diagnosis),
+    treatment: asText(data.treatment),
+    notes: asText(data.notes),
+    suggestedExams: asStringList(data.suggestedExams),
+    differentials: asDifferentials(data.differentials),
+    medications: asMedications(data.medications),
+  };
+}
+
+async function handleBackup(req: IncomingMessage, res: ServerResponse, env: EnvMap): Promise<void> {
+  const target = await requireManagedUser(req, res, env);
+  if (!target) return;
+
+  const profileSnap = await target.db.collection(USERS_COLLECTION).doc(target.userId).get();
+  const profile = profileSnap.data() || {};
+  const [patientsSnap, consultationsSnap] = await Promise.all([
+    target.db.collection('patients').where('createdBy', '==', target.userId).get(),
+    target.db.collection('consultations').where('createdBy', '==', target.userId).get(),
+  ]);
+
+  const consultations = consultationsSnap.docs.map((item) => serializeConsultation(item.id, item.data()));
+  const byPatient = new Map<string, typeof consultations>();
+  const orphans: typeof consultations = [];
+  consultations.forEach((consultation) => {
+    if (!consultation.patientId) {
+      orphans.push(consultation);
+      return;
+    }
+    const group = byPatient.get(consultation.patientId) || [];
+    group.push(consultation);
+    byPatient.set(consultation.patientId, group);
+  });
+
+  const patients = patientsSnap.docs.map((item) => {
+    const data = item.data();
+    const visits = (byPatient.get(item.id) || []).slice().sort((a, b) => b.dateMillis - a.dateMillis);
+    byPatient.delete(item.id);
+    const weight = typeof data.weight === 'number' && Number.isFinite(data.weight) ? data.weight : null;
+    const ageYears = typeof data.ageYears === 'number' && Number.isFinite(data.ageYears) ? data.ageYears : null;
+    return {
+      id: item.id,
+      name: asText(data.name),
+      species: data.species === 'cat' ? 'cat' : data.species === 'dog' ? 'dog' : '',
+      sex: data.sex === 'male' || data.sex === 'female' ? data.sex : '',
+      breed: asText(data.breed),
+      weight,
+      ageYears,
+      neutered: typeof data.neutered === 'boolean' ? data.neutered : null,
+      ownerName: asText(data.ownerName),
+      ownerPhone: asText(data.ownerPhone),
+      consultations: visits,
+    };
+  }).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+
+  byPatient.forEach((visits) => orphans.push(...visits));
+  if (orphans.length) {
+    orphans.sort((a, b) => b.dateMillis - a.dateMillis);
+    patients.push({
+      id: '__orphans__',
+      name: 'Atendimentos sem paciente vinculado',
+      species: '',
+      sex: '',
+      breed: '',
+      weight: null,
+      ageYears: null,
+      neutered: null,
+      ownerName: '',
+      ownerPhone: '',
+      consultations: orphans,
+    });
+  }
+
+  sendJson(res, 200, {
+    ok: true,
+    professional: {
+      displayName: asText(profile.displayName) || target.displayName,
+      email: target.email,
+      crmv: asText(profile.crmv),
+      contato: asText(profile.contato),
+    },
+    patients,
+  });
+}
+
 async function handleTestEmail(req: IncomingMessage, res: ServerResponse, env: EnvMap): Promise<void> {
   const token = bearerToken(req);
   if (!token) {
@@ -587,7 +835,10 @@ function attachPasswordResetRoutes(server: ViteDevServer, env: EnvMap): void {
       && path !== '/api/auth/request-password-reset'
       && path !== '/api/auth/revoke-own-sessions'
       && path !== '/api/auth/request-access'
-      && path !== '/api/admin/set-access'
+      &&       path !== '/api/admin/set-access'
+      && path !== '/api/admin/delete-history'
+      && path !== '/api/admin/delete-registration'
+      && path !== '/api/admin/backup'
       && path !== '/api/admin/test-email'
     ) {
       next();
@@ -618,6 +869,18 @@ function attachPasswordResetRoutes(server: ViteDevServer, env: EnvMap): void {
       }
       if (path === '/api/admin/set-access') {
         await handleSetAccess(req, res, env);
+        return;
+      }
+      if (path === '/api/admin/delete-history') {
+        await handleDeleteHistory(req, res, env);
+        return;
+      }
+      if (path === '/api/admin/delete-registration') {
+        await handleDeleteRegistration(req, res, env);
+        return;
+      }
+      if (path === '/api/admin/backup') {
+        await handleBackup(req, res, env);
         return;
       }
       if (path === '/api/admin/test-email') {
